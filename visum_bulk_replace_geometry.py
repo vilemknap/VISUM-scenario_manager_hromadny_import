@@ -150,7 +150,7 @@ def _repair_windows_path_values(raw):
     keys = ("project_dir", "tra_dir", "routes_dir", "work_dir", "backup_dir", "base_version")
     out = raw
     for key in keys:
-        pattern = r'("' + re.escape(key) + r'"\\s*:\\s*")([^"]*)(")'
+        pattern = r'("' + re.escape(key) + r'"\s*:\s*")([^"]*)(")'
         def repl(m):
             return m.group(1) + m.group(2).replace("\\", "/") + m.group(3)
         out = re.sub(pattern, repl, out)
