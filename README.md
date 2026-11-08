@@ -221,3 +221,18 @@ Skript používá zejména:
 - `GetMultipleAttributes(...)`
 
 Nejsou potřeba externí Python balíčky typu geopandas/shapely.
+
+
+## Důležitá změna: nová topologie, ne ohýbání staré trasy
+
+Aktuální verze skriptu nepředpokládá jednu nerozvětvenou starou trasu.
+
+Pro každou variantu používá:
+- celou novou osu `variant_N_*.geojson`,
+- autoritativní uzlové body z velkých kruhů `variant_N_*_velke_kruhy_body_snap.geojson`.
+
+Z těchto vstupů vytvoří nové úseky. Staré `NodeNo` a `LinkNo` používá pouze jako stabilní identifikátory kvůli Scenario Manageru a S1/S2/S3. Uzly dostanou nové souřadnice, hlavní linky nový `LINKPOLY` a navazující rampové linky se geometricky deformují podle posunu uzlů.
+
+Pokud je v MÚK více starých uzlů v jednom místě, mohou být zachována jejich různá ID, ale jsou přesunuta ke stejnému novému uzlovému bodu. To zachová vazby ramp a šířkových modifikací.
+
+Pro oranžovou variantu v dodaném DXF nebyly nalezeny žádné velké `CIRCLE` body. Skript proto pro W5 použije jasně označený fallback: staré uzlové členění promítne na novou oranžovou osu.
