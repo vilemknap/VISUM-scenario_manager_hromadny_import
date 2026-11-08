@@ -622,6 +622,21 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
+        tb = traceback.format_exc()
         print("\nFAIL: %s" % exc)
-        traceback.print_exc()
-        raise
+        print(tb)
+        error_file = SCRIPT_DIR / "LAST_ERROR.txt"
+        try:
+            error_file.write_text(tb, encoding="utf-8")
+        except Exception:
+            pass
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(
+                0,
+                "Skript skoncil chybou:\n\n%s\n\nDetail: %s" % (exc, error_file),
+                "R1 VISUM geometry import - ERROR",
+                0x10,
+            )
+        except Exception:
+            pass
