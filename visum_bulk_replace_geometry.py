@@ -134,6 +134,66 @@ def load_geojson(path):
     return max(lines, key=line_len)
 
 
+DEFAULT_IDENTITIES = {
+    "G_W1_oprava": "14AF",
+    "G_W2": "1E11",
+    "G_W3": "26B3",
+    "G_W4": "2E29",
+    "G_W5": "3156",
+}
+
+
+def _repair_windows_path_values(raw):
+    # Compatibility for configs written as C:\\folder\\file instead of valid JSON
+    # C:/folder/file or C:\\\\folder\\\\file.
+    import re
+    keys = ("project_dir", "tra_dir", "routes_dir", "work_dir", "backup_dir", "base_version")
+    out = raw
+    for key in keys:
+        pattern = r'("' + re.escape(key) + r'"\\s*:\\s*")([^"]*)(")'
+        def repl(m):
+            return m.group(1) + m.group(2).replace("\\", "/") + m.group(3)
+        out = re.sub(pattern, repl, out)
+    return out
+
+
+def load_config():
+    if not CONFIG.exists():
+        raise RuntimeError("Chybi config.json vedle skriptu: %s" % CONFIG)
+
+    raw = CONFIG.read_text(encoding="utf-8-sig")
+    try:
+        cfg = json.loads(raw)
+    except json.JSONDecodeError as first_exc:
+        repaired = _repair_windows_path_values(raw)
+        try:
+            cfg = json.loads(repaired)
+            print("WARNING: config.json obsahoval Windows cesty s jednoduchym \\. "
+                  "Skript je automaticky prevedl na /.")
+        except Exception:
+            raise RuntimeError(
+                "config.json neni platny JSON. U Windows cest pouzij C:/R1_VARIANTY "
+                "nebo C:\\\\R1_VARIANTY. Puvodni chyba: %s" % first_exc
+            )
+
+    mods = cfg.get("modifications", [])
+    if not isinstance(mods, list) or not mods:
+        raise RuntimeError("config.json neobsahuje pole modifications.")
+
+    for m in mods:
+        if "identity" not in m or not str(m.get("identity", "")).strip():
+            code = m.get("code")
+            if code in DEFAULT_IDENTITIES:
+                m["identity"] = DEFAULT_IDENTITIES[code]
+                print("WARNING: %s nema identity; doplnuji %s."
+                      % (code, m["identity"]))
+            else:
+                raise RuntimeError(
+                    "Chybi identity u modification %r a neni znamy bezpecny default." % m
+                )
+    return cfg
+
+
 def path_resolve(v, base):
     p = Path(str(v))
     return p if p.is_absolute() else (Path(base) / p).resolve()
@@ -467,7 +527,7 @@ def process(visum, base_ver, tra, route, m, global_cfg, work):
 
 
 def main():
-    cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
+    cfg = load_config()
     mode = cfg.get("mode", "dry-run")
     if mode not in ("dry-run", "apply"):
         raise RuntimeError("mode musi byt dry-run nebo apply")
