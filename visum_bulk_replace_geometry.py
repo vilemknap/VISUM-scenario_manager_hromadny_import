@@ -986,9 +986,16 @@ def process(visum, base_ver, tra, route, nodes_file, m, global_cfg, work):
         )
     else:
         if not bool(m.get("allow_node_fallback", False)):
+            expected = Path(m["route"]).stem + "_velke_kruhy_body_snap.geojson"
+            detail = (
+                "soubor nenalezen"
+                if nodes_file is None
+                else "soubor existuje, ale neobsahuje zadne Point prvky"
+            )
             raise RuntimeError(
-                "Pro %s nejsou autoritativni uzly z velkych kruhu. "
-                "Fallback neni povolen." % m["code"]
+                "Pro %s nejsou autoritativni uzly z velkych kruhu (%s). "
+                "Ocekavam v routes soubor %s. Fallback neni povolen."
+                % (m["code"], detail, expected)
             )
         candidates = fallback_segments_from_old_topology(visum, groups, target)
         node_source = "old_topology_projection"
@@ -1240,7 +1247,6 @@ if __name__ == "__main__":
     except Exception as exc:
         tb = traceback.format_exc()
         print("\nFAIL: %s" % exc)
-        print(tb)
         error_file = SCRIPT_DIR / "LAST_ERROR.txt"
         try:
             error_file.write_text(tb, encoding="utf-8")
