@@ -1,8 +1,8 @@
 {
   "mode": "dry-run",
-  "project_dir": "C:/PATH/TO/R1_VARIANTY_PROJECT",
+  "project_dir": "C:/R1_VARIANTY",
   "base_version": "R1_VARIANTYBase.ver",
-  "tra_dir": ".",
+  "tra_dir": "C:/R1_VARIANTY/Modifications",
   "routes_dir": "routes",
   "work_dir": "_geometry_update_work",
   "backup_dir": "backup_geometry_modifications",
