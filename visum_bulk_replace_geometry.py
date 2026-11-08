@@ -979,10 +979,16 @@ def process(visum, base_ver, tra, route, nodes_file, m, global_cfg, work):
             % (len(points), len(candidates))
         )
     else:
+        if not bool(m.get("allow_node_fallback", False)):
+            raise RuntimeError(
+                "Pro %s nejsou autoritativni uzly z velkych kruhu. "
+                "Fallback neni povolen." % m["code"]
+            )
         candidates = fallback_segments_from_old_topology(visum, groups, target)
         node_source = "old_topology_projection"
         print(
-            "WARNING: pro %s nejsou velke kruhy; pouzivam fallback projekce stareho cleneni na novou osu."
+            "WARNING: pro %s nejsou velke kruhy; explicitne povolen fallback "
+            "projekce stareho cleneni na novou osu."
             % m["code"]
         )
 
