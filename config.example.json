@@ -66,5 +66,6 @@
     }
   ],
   "authoritative_point_merge_tolerance_m": 1,
-  "junction_cluster_radius_m": 2000
+  "junction_cluster_radius_m": 2000,
+  "authoritative_node_match_radius_m": 1500
 }
