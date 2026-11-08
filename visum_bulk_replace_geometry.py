@@ -254,6 +254,409 @@ def selected_links(visum, cfg):
     return out
 
 
+
+def load_geojson_points(path):
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    feats = data.get("features", []) if data.get("type") == "FeatureCollection" else [data]
+    out = []
+    for f in feats:
+        g = f.get("geometry", f)
+        if not g or g.get("type") != "Point":
+            continue
+        c = g.get("coordinates", [])
+        if len(c) >= 2:
+            props = f.get("properties", {}) if isinstance(f, dict) else {}
+            out.append({
+                "xy": (float(c[0]), float(c[1])),
+                "order": props.get("poradi_po_trase"),
+                "station": props.get("stacionaz_m"),
+            })
+    return out
+
+
+def parse_tra_touched_nodes(path):
+    touched = set()
+    lines = Path(path).read_text(encoding="utf-8-sig", errors="replace").splitlines()
+    for i, line in enumerate(lines):
+        if not (line.startswith("$+NODE:") or line.startswith("$*NODE:")):
+            continue
+        hdr = line.split(":", 1)[1].split(";")
+        try:
+            no_idx = hdr.index("NO")
+        except ValueError:
+            continue
+        j = i + 1
+        while j < len(lines) and not lines[j].startswith("$"):
+            row = lines[j].strip()
+            if row and not row.startswith("*"):
+                vals = row.split(";")
+                if no_idx < len(vals) and vals[no_idx].strip():
+                    try:
+                        touched.add(int(float(vals[no_idx])))
+                    except Exception:
+                        pass
+            j += 1
+    return touched
+
+
+def selected_physical_groups(visum, cfg, target):
+    links = visum.Net.Links
+    type_attr = cfg["route_type_attribute"]
+    id_attr = cfg["route_identity_attribute"]
+    for a in (type_attr, id_attr):
+        if not attr_exists(links, a):
+            raise RuntimeError("Chybi link atribut %s" % a)
+
+    attrs = ["NO", "FROMNODENO", "TONODENO", type_attr, id_attr]
+    rows = links.GetMultipleAttributes(attrs)
+    groups = {}
+    for r in rows:
+        if norm(r[3]) != norm(cfg["route_type_value"]):
+            continue
+        if norm(r[4]) != norm(cfg["identity"]):
+            continue
+        no = int(r[0])
+        groups.setdefault(no, {"no": no, "dirs": []})
+        groups[no]["dirs"].append((int(r[1]), int(r[2])))
+
+    if not groups:
+        raise RuntimeError(
+            "Nenalezeny hlavni linky pro %s=%s, %s=%s"
+            % (type_attr, cfg["route_type_value"], id_attr, cfg["identity"])
+        )
+
+    tcum = cumlen(target)
+    for g in groups.values():
+        a, b = g["dirs"][0]
+        try:
+            pts = parse_wkt_line(visum.Net.Links.ItemByKey(a, b).AttValue("WKTPOLY"))
+        except Exception:
+            pts = []
+        if len(pts) < 2:
+            pts = [node_xy(visum, a), node_xy(visum, b)]
+        pcum = cumlen(pts)
+        mid = point_at(pts, pcum, pcum[-1] / 2.0)
+        station, _q, off = project(target, tcum, mid)
+        g["old_mid"] = mid
+        g["station"] = station
+        g["offset"] = off
+
+    out = sorted(groups.values(), key=lambda g: g["station"])
+    return out
+
+
+def split_target_by_authoritative_points(target, points, merge_tol=1.0):
+    tcum = cumlen(target)
+    total = tcum[-1]
+    stations = []
+    for p in points:
+        st, _q, _off = project(target, tcum, p["xy"])
+        if merge_tol < st < total - merge_tol:
+            stations.append(st)
+        elif st <= merge_tol:
+            stations.append(0.0)
+        else:
+            stations.append(total)
+
+    cuts = [0.0]
+    for st in sorted(stations):
+        if abs(st - cuts[-1]) > merge_tol:
+            cuts.append(st)
+    if abs(total - cuts[-1]) > merge_tol:
+        cuts.append(total)
+    else:
+        cuts[-1] = total
+
+    segs = []
+    for i, (a, b) in enumerate(zip(cuts, cuts[1:]), 1):
+        course = subline(target, tcum, a, b)
+        segs.append({
+            "candidate_id": i,
+            "s0": a,
+            "s1": b,
+            "course": course,
+            "mid": point_at(target, tcum, (a + b) / 2.0),
+            "length_m": line_len(course),
+        })
+    return segs
+
+
+def fallback_segments_from_old_topology(visum, groups, target):
+    # Pouziva se jen tehdy, kdy pro variantu nejsou autoritativni velke kruhy
+    # (v dodanem DXF je to aktualne oranzova). Zachova stare cleneni, ale uzly
+    # promita na novou osu.
+    tcum = cumlen(target)
+    total = tcum[-1]
+    raw = []
+    for g in groups:
+        for a, b in g["dirs"]:
+            for n in (a, b):
+                st, _q, _off = project(target, tcum, node_xy(visum, n))
+                raw.append(st)
+
+    raw = sorted(raw)
+    clustered = []
+    tol = 50.0
+    for st in raw:
+        if not clustered or abs(st - clustered[-1][-1]) > tol:
+            clustered.append([st])
+        else:
+            clustered[-1].append(st)
+    cuts = [sum(x) / len(x) for x in clustered]
+
+    nseg = len(groups)
+    if len(cuts) != nseg + 1:
+        # Bezpecny fallback: hranice odvodime z projekci stredu starych fyzickych
+        # linku. Je to stale lepsi nez vymyslet krizovatky, ale v reportu je tato
+        # varianta oznacena jako fallback.
+        mids = sorted(g["station"] for g in groups)
+        cuts = [max(0.0, mids[0] - (mids[1] - mids[0]) / 2.0) if len(mids) > 1 else 0.0]
+        for a, b in zip(mids, mids[1:]):
+            cuts.append((a + b) / 2.0)
+        cuts.append(min(total, mids[-1] + (mids[-1] - mids[-2]) / 2.0) if len(mids) > 1 else total)
+
+    cuts[0] = max(0.0, cuts[0])
+    cuts[-1] = min(total, cuts[-1])
+    segs = []
+    for i, (a, b) in enumerate(zip(cuts, cuts[1:]), 1):
+        course = subline(target, tcum, a, b)
+        segs.append({
+            "candidate_id": i, "s0": a, "s1": b,
+            "course": course,
+            "mid": point_at(target, tcum, (a + b) / 2.0),
+            "length_m": line_len(course),
+        })
+    return segs
+
+
+def choose_candidate_window(groups, candidates):
+    n = len(groups)
+    m = len(candidates)
+    if m < n:
+        raise RuntimeError(
+            "Nova topologie ma jen %d useku, ale stara geometry modification ma %d fyzickych hlavnih linku."
+            % (m, n)
+        )
+
+    best = None
+    for start in range(m - n + 1):
+        win = candidates[start:start + n]
+        cost = sum(d(g["old_mid"], seg["mid"]) for g, seg in zip(groups, win))
+        if best is None or cost < best[0]:
+            best = (cost, start, win)
+    return best[2], best[1], best[0]
+
+
+def assign_main_nodes(visum, groups, segments, touched_nodes):
+    desired = {}
+    link_binding = []
+
+    for g, seg in zip(groups, segments):
+        a, b = g["dirs"][0]
+        pa = node_xy(visum, a)
+        pb = node_xy(visum, b)
+        s0 = tuple(seg["course"][0])
+        s1 = tuple(seg["course"][-1])
+
+        forward_cost = d(pa, s0) + d(pb, s1)
+        reverse_cost = d(pa, s1) + d(pb, s0)
+        if forward_cost <= reverse_cost:
+            start_node, end_node = a, b
+        else:
+            start_node, end_node = b, a
+
+        for n, q in ((start_node, s0), (end_node, s1)):
+            if n in desired and d(desired[n], q) > 5.0:
+                raise RuntimeError(
+                    "Uzel %s dostal dve neslucitelne nove polohy (rozdil %.1f m)."
+                    % (n, d(desired[n], q))
+                )
+            desired[n] = q
+
+        link_binding.append({
+            "group": g,
+            "segment": seg,
+            "start_node": start_node,
+            "end_node": end_node,
+        })
+
+    old_xy = {n: node_xy(visum, n) for n in desired}
+    final_xy = {}
+    for n, q in desired.items():
+        # Uzly pridane/menene puvodni geometry modification prebiraji polohu z
+        # noveho CAD. Base/interface uzly zustavaji na svem miste a nova krivka
+        # se na ne napoji.
+        final_xy[n] = q if n in touched_nodes else old_xy[n]
+
+    mapped = []
+    for n in sorted(final_xy):
+        old = old_xy[n]
+        new = final_xy[n]
+        mapped.append({
+            "node_no": n,
+            "old_x": old[0], "old_y": old[1],
+            "new_x": new[0], "new_y": new[1],
+            "snap_m": d(old, new),
+            "role": "main",
+            "is_touched_node": n in touched_nodes,
+        })
+
+    return link_binding, final_xy, mapped
+
+
+def move_auxiliary_nodes(visum, touched_nodes, final_xy, mapped, radius):
+    direct = {r["node_no"]: r for r in mapped}
+    movers = [r for r in mapped if r["is_touched_node"] and r["snap_m"] > 1e-6]
+    if not movers:
+        return mapped
+
+    old_direct = {r["node_no"]: (r["old_x"], r["old_y"]) for r in movers}
+    delta = {
+        r["node_no"]: (r["new_x"] - r["old_x"], r["new_y"] - r["old_y"])
+        for r in movers
+    }
+
+    for n in sorted(touched_nodes):
+        if n in direct:
+            continue
+        try:
+            old = node_xy(visum, n)
+        except Exception:
+            continue
+        nearest = min(movers, key=lambda r: d(old, old_direct[r["node_no"]]))
+        dist0 = d(old, old_direct[nearest["node_no"]])
+        if dist0 > radius:
+            continue
+        dx, dy = delta[nearest["node_no"]]
+        new = (old[0] + dx, old[1] + dy)
+        final_xy[n] = new
+        mapped.append({
+            "node_no": n,
+            "old_x": old[0], "old_y": old[1],
+            "new_x": new[0], "new_y": new[1],
+            "snap_m": d(old, new),
+            "role": "aux",
+            "is_touched_node": True,
+            "cluster_master": nearest["node_no"],
+            "cluster_distance_m": dist0,
+        })
+    return mapped
+
+
+def orient_course_for_nodes(course, from_node, to_node, start_node, end_node):
+    if from_node == start_node and to_node == end_node:
+        return list(course)
+    if from_node == end_node and to_node == start_node:
+        return list(reversed(course))
+    # U neobvykle topologie rozhodneme podle koncovych souradnic.
+    return list(course)
+
+
+def make_plan_entry(from_node, to_node, course, link_no=None, kind="main"):
+    if len(course) < 2:
+        raise RuntimeError("Link %s->%s ma neplatnou geometrii." % (from_node, to_node))
+    interior = list(course[1:-1])
+    if not interior:
+        p0, p1 = course[0], course[-1]
+        interior = [((p0[0] + p1[0]) / 2.0, (p0[1] + p1[1]) / 2.0)]
+    return {
+        "write_from": int(from_node),
+        "write_to": int(to_node),
+        "course": list(course),
+        "interior": interior,
+        "length_m": line_len(course),
+        "directions": [(int(from_node), int(to_node))],
+        "link_no": link_no,
+        "kind": kind,
+    }
+
+
+def build_authoritative_main_plan(bindings, final_xy):
+    plan = []
+    main_pairs = set()
+    main_nos = set()
+
+    for b in bindings:
+        g = b["group"]
+        seg = b["segment"]
+        start_node = b["start_node"]
+        end_node = b["end_node"]
+        base_course = list(seg["course"])
+        base_course[0] = final_xy[start_node]
+        base_course[-1] = final_xy[end_node]
+
+        main_nos.add(g["no"])
+        for a, c in g["dirs"]:
+            course = orient_course_for_nodes(
+                base_course, a, c, start_node, end_node
+            )
+            course[0] = final_xy.get(a, node_xy_cached_fallback(a, final_xy))
+            course[-1] = final_xy.get(c, node_xy_cached_fallback(c, final_xy))
+            plan.append(make_plan_entry(a, c, course, g["no"], "main"))
+            main_pairs.add((a, c))
+    return plan, main_pairs, main_nos
+
+
+def node_xy_cached_fallback(node_no, final_xy):
+    # Placeholder overwritten in process by ensuring every main endpoint exists
+    # in final_xy. This branch should never be reached.
+    if node_no in final_xy:
+        return final_xy[node_no]
+    raise RuntimeError("Chybi nova poloha uzlu %s." % node_no)
+
+
+def warp_polyline(points, delta_from, delta_to):
+    if len(points) < 2:
+        return points
+    pcum = cumlen(points)
+    total = max(pcum[-1], 1e-9)
+    out = []
+    for p, s0 in zip(points, pcum):
+        t = s0 / total
+        dx = (1.0 - t) * delta_from[0] + t * delta_to[0]
+        dy = (1.0 - t) * delta_from[1] + t * delta_to[1]
+        out.append((p[0] + dx, p[1] + dy))
+    return out
+
+
+def build_adjacent_link_warp_plan(visum, mapped, main_pairs):
+    move = {
+        r["node_no"]: (
+            r["new_x"] - r["old_x"],
+            r["new_y"] - r["old_y"],
+        )
+        for r in mapped
+        if r["snap_m"] > 1e-6
+    }
+    if not move:
+        return []
+
+    rows = visum.Net.Links.GetMultipleAttributes(["NO", "FROMNODENO", "TONODENO"])
+    out = []
+    seen = set()
+    for no, a0, b0 in rows:
+        a, b = int(a0), int(b0)
+        if (a, b) in main_pairs:
+            continue
+        if a not in move and b not in move:
+            continue
+        key = (a, b)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            pts = parse_wkt_line(visum.Net.Links.ItemByKey(a, b).AttValue("WKTPOLY"))
+        except Exception:
+            pts = []
+        if len(pts) < 2:
+            pts = [node_xy(visum, a), node_xy(visum, b)]
+        da = move.get(a, (0.0, 0.0))
+        db = move.get(b, (0.0, 0.0))
+        course = warp_polyline(pts, da, db)
+        out.append(make_plan_entry(a, b, course, int(no), "adjacent"))
+    return out
+
+
 def physical_edges(directed):
     x = {}
     for a, b in directed:
@@ -541,10 +944,13 @@ def atomic_copy(src, dst):
     os.replace(str(tmp), str(dst))
 
 
-def process(visum, base_ver, tra, route, m, global_cfg, work):
+def process(visum, base_ver, tra, route, nodes_file, m, global_cfg, work):
     print("\n=== %s ===" % m["code"])
     visum.IO.LoadVersion(str(base_ver))
     visum.ApplyModelTransferFile(str(tra))
+
+    target = load_geojson(route)
+    touched_nodes = parse_tra_touched_nodes(tra)
 
     sel_cfg = {
         "route_type_attribute": global_cfg.get("route_type_attribute", "TYP"),
@@ -553,43 +959,87 @@ def process(visum, base_ver, tra, route, m, global_cfg, work):
         "route_color_attribute": global_cfg.get("route_color_attribute", "BARVA"),
         "identity": m["identity"],
     }
-    directed = selected_links(visum, sel_cfg)
-    edges_all = physical_edges(directed)
-    target = load_geojson(route)
 
-    nodes, selected_edge_keys, excluded_edge_keys = order_main_path_by_target(
-        visum,
-        edges_all,
-        target,
-        float(global_cfg.get("max_endpoint_snap_m", 3000.0)),
-        float(global_cfg.get("main_path_max_backtrack_m", 250.0)),
-    )
-    edges = {k: edges_all[k] for k in selected_edge_keys}
+    groups = selected_physical_groups(visum, sel_cfg, target)
+    print("stara geometry modification: %d fyzickych hlavnih linku" % len(groups))
 
+    points = []
+    if nodes_file is not None and Path(nodes_file).exists():
+        points = load_geojson_points(nodes_file)
+
+    if points:
+        candidates = split_target_by_authoritative_points(
+            target,
+            points,
+            float(global_cfg.get("authoritative_point_merge_tolerance_m", 1.0)),
+        )
+        node_source = "large_circles"
+        print(
+            "nova topologie: %d autoritativnich velkych kruhu -> %d kandidatnich useku"
+            % (len(points), len(candidates))
+        )
+    else:
+        candidates = fallback_segments_from_old_topology(visum, groups, target)
+        node_source = "old_topology_projection"
+        print(
+            "WARNING: pro %s nejsou velke kruhy; pouzivam fallback projekce stareho cleneni na novou osu."
+            % m["code"]
+        )
+
+    segments, window_start, window_cost = choose_candidate_window(groups, candidates)
     print(
-        "hlavni prubezna trasa: %d fyzickych linku, %d uzlu; "
-        "ignorovano %d odbockovych/rampovych linku"
-        % (len(edges), len(nodes), len(excluded_edge_keys))
+        "vybrano %d novych useku (okno od %d, match cost %.1f m)"
+        % (len(segments), window_start + 1, window_cost)
     )
 
-    target, cum, mapped = map_nodes(
-        visum, nodes, target,
-        float(global_cfg.get("max_route_node_snap_m", 3000.0)),
-        float(global_cfg.get("max_endpoint_snap_m", 3000.0)),
-        float(global_cfg.get("minimum_route_node_spacing_m", 0.25)),
-        float(global_cfg.get("max_station_backtrack_m", 50.0)),
+    bindings, final_xy, mapped = assign_main_nodes(
+        visum, groups, segments, touched_nodes
     )
-    print("max posun uzlu: %.1f m" % max(x["snap_m"] for x in mapped))
+
+    mapped = move_auxiliary_nodes(
+        visum,
+        touched_nodes,
+        final_xy,
+        mapped,
+        float(global_cfg.get("junction_cluster_radius_m", 2000.0)),
+    )
+
+    max_move = max((r["snap_m"] for r in mapped), default=0.0)
+    if max_move > float(global_cfg.get("max_route_node_snap_m", 3000.0)):
+        worst = max(mapped, key=lambda r: r["snap_m"])
+        raise RuntimeError(
+            "Uzel %s by se posunul %.1f m, limit je %.1f m"
+            % (
+                worst["node_no"],
+                worst["snap_m"],
+                float(global_cfg.get("max_route_node_snap_m", 3000.0)),
+            )
+        )
 
     set_nodes(visum, mapped)
-    plan = build_plan(nodes, edges, mapped, target, cum)
+
+    main_plan, main_pairs, _main_nos = build_authoritative_main_plan(
+        bindings, final_xy
+    )
+    adjacent_plan = build_adjacent_link_warp_plan(visum, mapped, main_pairs)
+    plan = main_plan + adjacent_plan
+
+    print(
+        "vkladam: %d smerovych hlavnih krivek + %d navazujicich/rampovych krivek; "
+        "%d uzlu ma novou polohu"
+        % (len(main_plan), len(adjacent_plan), len(mapped))
+    )
 
     patch = work / "linkpoly_patch" / (m["code"] + ".net")
     write_net(patch, plan)
     visum.IO.LoadNet(str(patch), True)
 
     if global_cfg.get("set_link_length_from_geometry", True):
-        set_lengths(visum, plan, float(global_cfg.get("coordinate_m_to_length_unit", 0.001)))
+        set_lengths(
+            visum,
+            plan,
+            float(global_cfg.get("coordinate_m_to_length_unit", 0.001)),
+        )
 
     tol = float(global_cfg.get("geometry_verification_tolerance_m", 2.0))
     verify_nodes(visum, mapped, tol)
@@ -597,7 +1047,9 @@ def process(visum, base_ver, tra, route, m, global_cfg, work):
 
     canonical = work / "canonical_tra" / Path(tra).name
     canonical.parent.mkdir(parents=True, exist_ok=True)
-    visum.GenerateModelTransferFile(str(base_ver), str(canonical), "", False, False, True, True)
+    visum.GenerateModelTransferFile(
+        str(base_ver), str(canonical), "", False, False, True, True
+    )
     if not canonical.exists() or canonical.stat().st_size < 100:
         raise RuntimeError("Nevznikla platna canonical TRA: %s" % canonical)
 
@@ -615,12 +1067,20 @@ def process(visum, base_ver, tra, route, m, global_cfg, work):
         r["color"] = m["color"]
 
     return {
-        "code": m["code"], "tra": str(tra), "canonical": str(canonical),
-        "route": str(route), "nodes": mapped, "links": link_rows,
-        "max_node_move_m": max(x["snap_m"] for x in mapped),
-        "main_path_physical_links": len(edges),
-        "ignored_branch_physical_links": len(excluded_edge_keys),
-        "ignored_branch_edges": [list(x) for x in excluded_edge_keys]
+        "code": m["code"],
+        "tra": str(tra),
+        "canonical": str(canonical),
+        "route": str(route),
+        "nodes_file": str(nodes_file) if nodes_file else None,
+        "node_source": node_source,
+        "nodes": mapped,
+        "links": link_rows,
+        "max_node_move_m": max_move,
+        "physical_main_links": len(groups),
+        "candidate_segments": len(candidates),
+        "selected_segment_window_start": window_start + 1,
+        "selected_segment_window_cost_m": window_cost,
+        "warped_adjacent_directional_links": len(adjacent_plan),
     }
 
 
