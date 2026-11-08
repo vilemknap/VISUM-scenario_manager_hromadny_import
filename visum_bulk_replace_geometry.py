@@ -407,7 +407,8 @@ def _repair_windows_paths(raw):
     return raw
 
 
-def load_config(path=CONFIG):
+def load_config(path=None):
+    path = path or CONFIG
     if not Path(path).exists():
         raise Fail("Chybi config.json vedle skriptu: %s" % path)
     raw = Path(path).read_text(encoding="utf-8-sig")
@@ -1515,7 +1516,9 @@ def collect_max_numbers(tra_dir, net_nodes, net_links):
     return max_node, max_link
 
 
-def run(cfg, visum=None, log=print):
+def run(cfg, visum=None, log=None):
+    if log is None:
+        log = print
     mode = cfg["mode"]
     project = resolve(cfg["project_dir"], SCRIPT_DIR)
     base_ver = resolve(cfg["base_version"], project)
@@ -1685,6 +1688,7 @@ def run(cfg, visum=None, log=print):
     save_csv(report_dir / "nove_linky.csv", all_links)
     save_csv(report_dir / "sirkove_modifikace_radky.csv", all_width_log)
     summary = {"status": "PASS", "mode": mode, "timestamp": stamp, "vpdb_modified": False,
+               "report_dir": str(report_dir),
                "warnings": warnings, "results": results}
     (report_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     log("\nUPOZORNENI (%d):" % len(warnings))
@@ -1717,21 +1721,70 @@ def run(cfg, visum=None, log=print):
     return summary
 
 
+class RunLog(object):
+    """Zapis prubehu do LAST_RUN.log vedle skriptu (a na konci i do report/run.log).
+    V tichem rezimu (silent) se nic nevypisuje do Visumu -> zadna vyskakovaci okna."""
+
+    def __init__(self, path, echo):
+        self.path = Path(path)
+        self.echo = echo
+        self.lines = []
+        self.path.write_text("", encoding="utf-8")
+
+    def __call__(self, msg=""):
+        line = "%s  %s" % (dt.datetime.now().strftime("%H:%M:%S"), msg)
+        self.lines.append(line)
+        with open(str(self.path), "a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+        if self.echo:
+            print(msg)
+
+    def copy_to(self, path):
+        try:
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(str(self.path), str(path))
+        except Exception:
+            pass
+
+
 def main():
-    cfg = load_config()
-    return run(cfg)
+    silent = True
+    try:
+        raw = json.loads(_repair_windows_paths(CONFIG.read_text(encoding="utf-8-sig")))
+        silent = bool(raw.get("silent", True))
+    except Exception:
+        pass
+    log = RunLog(SCRIPT_DIR / "LAST_RUN.log", echo=not silent)
+    status = SCRIPT_DIR / "LAST_STATUS.txt"
+    for f in (SCRIPT_DIR / "LAST_ERROR.txt", status):
+        try:
+            f.unlink()
+        except Exception:
+            pass
+    try:
+        cfg = load_config()
+        summary = run(cfg, log=log)
+        log("VYSLEDEK: PASS (%s)" % cfg["mode"])
+        status.write_text("PASS %s %s\n" % (cfg["mode"], dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                          encoding="utf-8")
+        if summary and summary.get("report_dir"):
+            log.copy_to(Path(summary["report_dir"]) / "run.log")
+        return summary
+    except Exception as exc:
+        tb = traceback.format_exc()
+        log("FAIL: %s" % exc)
+        log(tb)
+        log("VYSLEDEK: FAIL")
+        try:
+            (SCRIPT_DIR / "LAST_ERROR.txt").write_text("%s\n\n%s" % (exc, tb), encoding="utf-8")
+            status.write_text("FAIL %s\n%s\n" % (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), exc),
+                              encoding="utf-8")
+        except Exception:
+            pass
+        if not silent:
+            raise
+        return None
 
 
 if __name__ == "__main__" or "Visum" in globals():
-    try:
-        main()
-    except Exception as _exc:
-        _tb = traceback.format_exc()
-        print("\nFAIL: %s" % _exc)
-        print(_tb)
-        try:
-            (SCRIPT_DIR / "LAST_ERROR.txt").write_text(
-                "%s\n\n%s" % (_exc, _tb), encoding="utf-8")
-        except Exception:
-            pass
-        raise
+    main()

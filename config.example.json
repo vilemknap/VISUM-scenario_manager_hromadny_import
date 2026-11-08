@@ -1,5 +1,6 @@
 {
   "mode": "dry-run",
+  "silent": true,
 
   "project_dir": "C:/R1_VARIANTY",
   "base_version": "R1_VARIANTYBase.ver",

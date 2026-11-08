@@ -76,6 +76,15 @@ V `project_dir` musí být `R1_VARIANTYBase.ver` a `R1_VARIANTY.vpdb`. V `tra_di
    - `<kód>/nahled_nova_trasa.geojson`: náhled nových uzlů a linků a smazané staré trasy (otevřete v QGIS),
    - `<kód>/canonical/*.tra`: nové `.tra` soubory.
 
+### Průběh a výsledek (tichý režim)
+Při `"silent": true` (výchozí) skript během běhu nezobrazuje žádná okna. Vše zapisuje vedle skriptu do:
+- `LAST_STATUS.txt`: jednořádkový výsledek `PASS dry-run …`, `PASS apply …` nebo `FAIL …`,
+- `LAST_RUN.log`: celý průběh s časy (kopie je i v `report/run.log`),
+- `LAST_ERROR.txt`: jen při chybě, s podrobnostmi.
+
+Skript skončil, když Visum přestane být zaneprázdněné. Výsledek pak zjistíte v `LAST_STATUS.txt`.
+Při `"silent": false` se průběh vypisuje do Visumu (každý řádek jako okno) a chyba se zobrazí jako dialog.
+
 ### 4. APPLY
 Pokud je dry-run v pořádku, nastavte `"mode": "apply"` a spusťte skript znovu.
 Původní `.tra` se uloží do `C:/R1_VARIANTY/backup_modifications/<čas>/` a nahradí se novými.

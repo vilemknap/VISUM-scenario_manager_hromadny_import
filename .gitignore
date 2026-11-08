@@ -1,6 +1,9 @@
-config.json
-routes/*.geojson
+*.pyc
+LAST_ERROR.txt
+LAST_RUN.log
+LAST_STATUS.txt
+__pycache__/
 _geometry_update_work/
 backup_geometry_modifications/
-__pycache__/
-*.pyc
+config.json
+routes/*.geojson
