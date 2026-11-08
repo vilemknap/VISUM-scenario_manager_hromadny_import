@@ -647,6 +647,7 @@ def build_plan(model, mod_cfg, cfg, width_tras, inputs, alloc, all_node_xy, net_
     trim = bool(mod_cfg.get("trim_to_old_extent", cfg.get("trim_to_old_extent", True)))
     plan.trim = trim
     plan.replace_existing_route = bool(mod_cfg.get("replace_old_route_on_existing_network", False))
+    plan.open_closed_route_links = bool(mod_cfg.get("open_closed_route_links", False))
     for part in inputs:
         ident = part["identity"]
         chains = chain_lines(part["lines"], float(cfg["line_join_tolerance_m"]))
@@ -1288,6 +1289,17 @@ def map_width_tables(wtra, plan, model):
                     old_on_existing.add((f, t2))
                     old_on_existing.add((t2, f))
 
+    # volitelne: zavrene useky hlavni trasy otevrit profilem zbytku trasy v teze sirkove modifikaci
+    open_profile = None
+    if getattr(plan, "open_closed_route_links", False):
+        lk = wtra.table("*LINK")
+        if lk is not None and "TSYSSET" in lk.idx:
+            cols = [c for c in ("TYPENO", "TSYSSET", "CAPPRT", "V0PRT") if c in lk.idx]
+            prof = collections.Counter(tuple(lk.get(r, c) for c in cols) for r in lk.rows
+                                       if to_int(lk.get(r, "NO")) in plan.old_main and lk.get(r, "TSYSSET") != "")
+            if prof:
+                open_profile = dict(zip(cols, prof.most_common(1)[0][0]))
+
     for t in wtra.tables:
         if t.name == "VERSION":
             continue
@@ -1298,6 +1310,12 @@ def map_width_tables(wtra, plan, model):
                 key = (to_int(t.get(r, "FROMNODENO")), to_int(t.get(r, "TONODENO")))
                 if key in main_dirs:
                     targets = plan.old_dir_to_new.get(key, [])
+                    if open_profile and t.tag() == "*LINK" and t.get(r, "TSYSSET") == "":
+                        r = list(r)
+                        for c, v in open_profile.items():
+                            r[t.idx[c]] = v
+                        stats["zavreny usek trasy otevren (%s)" % t.tag()] += len(targets)
+                        log.append((t.tag(), "%d-%d" % key, "zavreny usek otevren: %s" % open_profile))
                     for (nno, a, b) in targets:
                         r2 = list(r)
                         r2[t.idx["FROMNODENO"]], r2[t.idx["TONODENO"]] = str(a), str(b)

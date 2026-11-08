@@ -38,6 +38,7 @@
     {
       "code": "G_W4",
       "tra": "M000004.tra",
+      "open_closed_route_links": true,
       "parts": [
         {"identity": "2E29", "route": "variant_4_modra.geojson", "nodes": "variant_4_modra_velke_kruhy_body_snap.geojson"}
       ]
