@@ -1,0 +1,6 @@
+config.json
+routes/*.geojson
+_geometry_update_work/
+backup_geometry_modifications/
+__pycache__/
+*.pyc
