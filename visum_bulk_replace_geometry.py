@@ -1016,13 +1016,15 @@ def process(visum, base_ver, tra, route, nodes_file, m, global_cfg, work):
             )
         )
 
-    set_nodes(visum, mapped)
-
+    # Rampy/navazujici linky deformujeme z puvodni geometrie, proto plan
+    # sestavime jeste pred presunem uzlu.
     main_plan, main_pairs, _main_nos = build_authoritative_main_plan(
         bindings, final_xy
     )
     adjacent_plan = build_adjacent_link_warp_plan(visum, mapped, main_pairs)
     plan = main_plan + adjacent_plan
+
+    set_nodes(visum, mapped)
 
     print(
         "vkladam: %d smerovych hlavnih krivek + %d navazujicich/rampovych krivek; "
@@ -1111,11 +1113,16 @@ def main():
                 raise RuntimeError("Chybi %s v modification %r" % (key, m))
         tra = path_resolve(m["tra"], tra_dir)
         route = path_resolve(m["route"], routes_dir)
+        nodes_file = None
+        if m.get("nodes"):
+            nodes_file = path_resolve(m["nodes"], routes_dir)
         if not tra.exists():
             raise RuntimeError("Nenalezena TRA: %s" % tra)
         if not route.exists():
             raise RuntimeError("Nenalezena trasa: %s" % route)
-        resolved.append((m, tra, route))
+        if nodes_file is not None and not nodes_file.exists():
+            raise RuntimeError("Nenalezen soubor autoritativnich uzlu: %s" % nodes_file)
+        resolved.append((m, tra, route, nodes_file))
 
     print("R1 VISUM bulk geometry replacement")
     print("mode: %s" % mode)
@@ -1128,8 +1135,8 @@ def main():
     all_nodes = []
     all_links = []
 
-    for m, tra, route in resolved:
-        r = process(visum, base_ver, tra, route, m, cfg, work)
+    for m, tra, route, nodes_file in resolved:
+        r = process(visum, base_ver, tra, route, nodes_file, m, cfg, work)
         results.append(r)
         all_nodes.extend(r.pop("nodes"))
         all_links.extend(r.pop("links"))
@@ -1159,14 +1166,14 @@ def main():
 
     backup = backup_root / stamp
     backup.mkdir(parents=True, exist_ok=False)
-    for _m, tra, _route in resolved:
+    for _m, tra, _route, _nodes in resolved:
         shutil.copy2(str(tra), str(backup / tra.name))
 
     try:
         for r in results:
             atomic_copy(Path(r["canonical"]), Path(r["tra"]))
     except Exception:
-        for _m, tra, _route in resolved:
+        for _m, tra, _route, _nodes in resolved:
             src = backup / tra.name
             if src.exists():
                 shutil.copy2(str(src), str(tra))
