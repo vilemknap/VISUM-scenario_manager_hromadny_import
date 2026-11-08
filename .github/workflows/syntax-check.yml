@@ -1,4 +1,5 @@
 name: syntax-check
+# validates current topology-import implementation
 
 on:
   push:
