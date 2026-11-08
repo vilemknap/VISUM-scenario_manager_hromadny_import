@@ -261,42 +261,124 @@ def physical_edges(directed):
     return x
 
 
-def order_path(edges):
-    adj = {}
-    for a, b in edges:
-        adj.setdefault(a, set()).add(b)
-        adj.setdefault(b, set()).add(a)
+def _edge_geometry_length(visum, edge_map, u, v):
+    dirs = edge_map[(min(u, v), max(u, v))]
+    a, b = dirs[0]
+    try:
+        wkt = visum.Net.Links.ItemByKey(int(a), int(b)).AttValue("WKTPOLY")
+        pts = parse_wkt_line(wkt)
+        if len(pts) >= 2:
+            return line_len(pts)
+    except Exception:
+        pass
+    return d(node_xy(visum, u), node_xy(visum, v))
 
-    branch = {n: len(v) for n, v in adj.items() if len(v) > 2}
-    if branch:
-        raise RuntimeError("Hlavni trasa je rozvetvena: %r" % branch)
 
-    ends = [n for n, v in adj.items() if len(v) == 1]
-    if len(ends) != 2:
-        raise RuntimeError("Ocekavany 2 koncove uzly, nalezeno %d: %r" % (len(ends), ends))
+def _dijkstra_main_path(visum, edge_map, target, start, end, max_backtrack_m):
+    import heapq
 
-    start = sorted(ends)[0]
-    out = [start]
-    prev = None
-    cur = start
-    used = set()
-    while True:
-        opts = [n for n in adj[cur] if n != prev]
-        if not opts:
+    nodes = sorted({n for e in edge_map for n in e})
+    xy = {n: node_xy(visum, n) for n in nodes}
+    tcum = cumlen(target)
+    proj = {}
+    for n in nodes:
+        st, _q, off = project(target, tcum, xy[n])
+        proj[n] = (st, off)
+
+    adj = {n: [] for n in nodes}
+    for u, v in edge_map:
+        mid = ((xy[u][0] + xy[v][0]) / 2.0, (xy[u][1] + xy[v][1]) / 2.0)
+        _sm, _qm, off_mid = project(target, tcum, mid)
+        geom_len = max(_edge_geometry_length(visum, edge_map, u, v), 0.01)
+
+        for a, b in ((u, v), (v, u)):
+            sa, off_a = proj[a]
+            sb, off_b = proj[b]
+            ds = sb - sa
+
+            # Hlavni osa ma jit prevazne dopredu po nove trase.
+            # Rampy/odbocky typicky maji velky bocni odstup nebo maly/negativni
+            # postup ve staniceni. Nezakazujeme je natvrdo, jen je silne penalizujeme.
+            backtrack = max(0.0, -ds - max_backtrack_m)
+            station_mismatch = abs(abs(ds) - geom_len)
+            off_penalty = 4.0 * (off_a + off_b + 2.0 * off_mid)
+            mismatch_penalty = 2.0 * station_mismatch
+            backtrack_penalty = 100.0 * backtrack
+            weight = geom_len + off_penalty + mismatch_penalty + backtrack_penalty
+            adj[a].append((b, weight))
+
+    dist = {start: 0.0}
+    prev = {}
+    heap = [(0.0, start)]
+    while heap:
+        cur_d, u = heapq.heappop(heap)
+        if cur_d != dist.get(u):
+            continue
+        if u == end:
             break
-        if len(opts) != 1:
-            raise RuntimeError("Nejednoznacne pokracovani v uzlu %s" % cur)
-        nxt = opts[0]
-        e = (min(cur, nxt), max(cur, nxt))
-        if e in used:
-            raise RuntimeError("Cyklus v hlavni trase")
-        used.add(e)
-        out.append(nxt)
-        prev, cur = cur, nxt
+        for v, w in adj.get(u, []):
+            nd = cur_d + w
+            if nd < dist.get(v, float("inf")):
+                dist[v] = nd
+                prev[v] = u
+                heapq.heappush(heap, (nd, v))
 
-    if len(used) != len(edges):
-        raise RuntimeError("Hlavni trasa neni souvisla")
-    return out
+    if end not in dist:
+        raise RuntimeError("Nenalezena souvisla hlavni cesta mezi krajnimi body nove trasy.")
+
+    path = [end]
+    while path[-1] != start:
+        path.append(prev[path[-1]])
+    path.reverse()
+    return path, proj
+
+
+def order_main_path_by_target(visum, edge_map, target, endpoint_limit, max_backtrack_m):
+    nodes = sorted({n for e in edge_map for n in e})
+    if len(nodes) < 2:
+        raise RuntimeError("Vyber hlavni trasy obsahuje mene nez 2 uzly.")
+
+    xy = {n: node_xy(visum, n) for n in nodes}
+
+    start = min(nodes, key=lambda n: d(xy[n], target[0]))
+    end = min(nodes, key=lambda n: d(xy[n], target[-1]))
+
+    # Kdyby byl GeoJSON orientovan obracene, toto je stale v poradku:
+    # start/end se berou z jeho skutecnych koncu a dalsi mapovani si orientaci
+    # jeste jednou nezavisle overi.
+    start_err = d(xy[start], target[0])
+    end_err = d(xy[end], target[-1])
+
+    if start == end:
+        raise RuntimeError("Oba konce nove trasy se mapuji na stejny uzel %s." % start)
+    if start_err > endpoint_limit or end_err > endpoint_limit:
+        raise RuntimeError(
+            "Konce nove trasy jsou prilis daleko od site: start %.1f m, end %.1f m, limit %.1f m"
+            % (start_err, end_err, endpoint_limit)
+        )
+
+    path, proj = _dijkstra_main_path(
+        visum, edge_map, target, start, end, max_backtrack_m
+    )
+
+    selected_edges = {
+        (min(a, b), max(a, b)) for a, b in zip(path, path[1:])
+    }
+    excluded_edges = sorted(set(edge_map.keys()) - selected_edges)
+
+    # Kontrola, ze vybrana cesta skutecne postupuje po nove ose a neskace
+    # mezi vzdalenymi rampami.
+    stations = [proj[n][0] for n in path]
+    worst_backtrack = 0.0
+    for a, b in zip(stations, stations[1:]):
+        worst_backtrack = max(worst_backtrack, a - b)
+    if worst_backtrack > max_backtrack_m:
+        raise RuntimeError(
+            "Nejlepsi nalezena cesta se vraci ve staniceni o %.1f m; limit je %.1f m."
+            % (worst_backtrack, max_backtrack_m)
+        )
+
+    return path, selected_edges, excluded_edges
 
 
 def node_xy(visum, n):
@@ -472,11 +554,24 @@ def process(visum, base_ver, tra, route, m, global_cfg, work):
         "identity": m["identity"],
     }
     directed = selected_links(visum, sel_cfg)
-    edges = physical_edges(directed)
-    nodes = order_path(edges)
-    print("trasa: %d fyzickych linku, %d uzlu" % (len(edges), len(nodes)))
-
+    edges_all = physical_edges(directed)
     target = load_geojson(route)
+
+    nodes, selected_edge_keys, excluded_edge_keys = order_main_path_by_target(
+        visum,
+        edges_all,
+        target,
+        float(global_cfg.get("max_endpoint_snap_m", 3000.0)),
+        float(global_cfg.get("main_path_max_backtrack_m", 250.0)),
+    )
+    edges = {k: edges_all[k] for k in selected_edge_keys}
+
+    print(
+        "hlavni prubezna trasa: %d fyzickych linku, %d uzlu; "
+        "ignorovano %d odbockovych/rampovych linku"
+        % (len(edges), len(nodes), len(excluded_edge_keys))
+    )
+
     target, cum, mapped = map_nodes(
         visum, nodes, target,
         float(global_cfg.get("max_route_node_snap_m", 3000.0)),
@@ -522,7 +617,10 @@ def process(visum, base_ver, tra, route, m, global_cfg, work):
     return {
         "code": m["code"], "tra": str(tra), "canonical": str(canonical),
         "route": str(route), "nodes": mapped, "links": link_rows,
-        "max_node_move_m": max(x["snap_m"] for x in mapped)
+        "max_node_move_m": max(x["snap_m"] for x in mapped),
+        "main_path_physical_links": len(edges),
+        "ignored_branch_physical_links": len(excluded_edge_keys),
+        "ignored_branch_edges": [list(x) for x in excluded_edge_keys]
     }
 
 
