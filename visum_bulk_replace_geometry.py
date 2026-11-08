@@ -27,6 +27,7 @@ import traceback
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 CONFIG = SCRIPT_DIR / "config.json"
+SCRIPT_VERSION = "2026-11-08.4-topology-nodes"
 
 
 def norm(v):
@@ -1162,6 +1163,9 @@ def main():
         resolved.append((m, tra, route, nodes_file))
 
     print("R1 VISUM bulk geometry replacement")
+    print("SCRIPT_VERSION: %s" % SCRIPT_VERSION)
+    print("SCRIPT_FILE: %s" % Path(__file__).resolve())
+    print("CONFIG_FILE: %s" % CONFIG)
     print("mode: %s" % mode)
     print("base: %s" % base_ver)
     print("work: %s" % work)
@@ -1256,7 +1260,7 @@ if __name__ == "__main__":
             import ctypes
             ctypes.windll.user32.MessageBoxW(
                 0,
-                "Skript skoncil chybou:\n\n%s\n\nDetail: %s" % (exc, error_file),
+                "Verze: %s\nSkript: %s\n\nSkript skoncil chybou:\n\n%s\n\nDetail: %s" % (SCRIPT_VERSION, Path(__file__).resolve(), exc, error_file),
                 "R1 VISUM geometry import - ERROR",
                 0x10,
             )
