@@ -12,7 +12,7 @@
     {
       "code": "G_W1_oprava",
       "tra": "M000021.tra",
-      "trim_to_old_extent": false,
+      "replace_old_route_on_existing_network": true,
       "parts": [
         {"identity": "14AF", "route": "variant_2_fialova.geojson", "nodes": "variant_2_fialova_velke_kruhy_body_snap.geojson"}
       ]
@@ -60,7 +60,7 @@
     }
   ],
 
-  "trim_to_old_extent": true,
+  "trim_to_old_extent": false,
   "endpoint_snap_to_old_anchor_m": 500,
   "circle_max_offset_m": 50,
   "circle_offset_action": "fail",
@@ -68,6 +68,7 @@
   "junction_fallback_when_no_circles": true,
   "keep_links": [],
   "endpoint_connect_existing_m": 300,
+  "existing_node_on_axis_m": 20,
   "junction_match_station_m": 1500,
   "new_node_no_start": "auto",
   "new_link_no_start": "auto"

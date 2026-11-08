@@ -388,6 +388,7 @@ DEFAULTS = {
     "junction_match_station_m": 1500.0,
     "junction_cluster_m": 600.0,
     "endpoint_connect_existing_m": 300.0,
+    "existing_node_on_axis_m": 20.0,
     "extra_connectors": [],
     "endpoint_snap_to_any_node_m": 5.0,
     "max_old_route_offset_median_m": 5000.0,
@@ -645,7 +646,7 @@ def build_plan(model, mod_cfg, cfg, width_tras, inputs, alloc, all_node_xy, net_
 
     trim = bool(mod_cfg.get("trim_to_old_extent", cfg.get("trim_to_old_extent", True)))
     plan.trim = trim
-    plan.replace_existing_route = bool(mod_cfg.get("replace_old_route_on_existing_network", not trim))
+    plan.replace_existing_route = bool(mod_cfg.get("replace_old_route_on_existing_network", False))
     for part in inputs:
         ident = part["identity"]
         chains = chain_lines(part["lines"], float(cfg["line_join_tolerance_m"]))
@@ -687,6 +688,9 @@ def build_plan(model, mod_cfg, cfg, width_tras, inputs, alloc, all_node_xy, net_
                     s1, term1 = best[0], best[2]
             if s1 < s0:
                 s0, s1, term0, term1 = s1, s0, term1, term0
+            on_axis_tol = float(cfg["existing_node_on_axis_m"])
+            axis_anchors = [(s, a) for (s, off, a) in on_anchors
+                            if off <= on_axis_tol and s0 + 1.0 < s < s1 - 1.0 and a not in (term0, term1)]
             if s0 > 1.0 or s1 < L - 1.0:
                 plan.trim_rows.append({"modification": plan.code, "identity": ident, "axis_length_m": round(L, 1),
                                        "used_from_m": round(s0, 1), "used_to_m": round(s1, 1),
@@ -719,13 +723,18 @@ def build_plan(model, mod_cfg, cfg, width_tras, inputs, alloc, all_node_xy, net_
                     plan.warnings.append("%s: velky kruh (staniceni %.0f m) je mimo nahrazovany usek - vynechan"
                                          % (plan.code, s))
                     continue
+                near_ax = [a for (sa, a) in axis_anchors if abs(sa - s) <= anchor_merge]
+                if near_ax:
+                    plan.warnings.append("%s: velky kruh (staniceni %.0f m) = stavajici uzel %d lezici na ose"
+                                         % (plan.code, s, near_ax[0]))
+                    continue
                 stops.append([s, q, "velky_kruh", None])
             # mista napojeni stavajici site, u kterych neni velky kruh -> novy uzel v jejich prumetu
             if cfg.get("junction_fallback_when_no_circles", True):
                 lim_ = float(cfg["junction_match_station_m"])
                 proj = []
                 for b_, lst in contacts.items():
-                    if b_ in (term0, term1) or b_ not in xy0:
+                    if b_ in (term0, term1) or b_ not in xy0 or b_ in [a for (_s, a) in axis_anchors]:
                         continue
                     lno, x = lst[0]
                     p = xy0[b_] if lno in main else model.node_xy.get(x, xy0[b_])
@@ -751,6 +760,10 @@ def build_plan(model, mod_cfg, cfg, width_tras, inputs, alloc, all_node_xy, net_
                         "%s / %s: stavajici uzly %s byly napojeny na starou trasu a do %.0f m neni velky kruh -> "
                         "novy uzel v prumetu na novou osu (staniceni %.0f m)"
                         % (plan.code, ident, ",".join(str(x[1]) for x in g), lim_, s))
+            for (sa, a) in axis_anchors:
+                stops.append([sa, xy0[a], "stavajici_uzel_na_ose", a])
+                plan.warnings.append("%s / %s: stavajici uzel %d lezi na nove ose (staniceni %.0f m) - trasa jim prochazi"
+                                     % (plan.code, ident, a, sa))
             stops.append([s0, xy0[term0] if term0 else point_at(c, cum, s0), "zacatek", term0])
             stops.append([s1, xy0[term1] if term1 else point_at(c, cum, s1), "konec", term1])
             stops.sort(key=lambda x: x[0])
