@@ -236,3 +236,25 @@ Z těchto vstupů vytvoří nové úseky. Staré `NodeNo` a `LinkNo` používá 
 Pokud je v MÚK více starých uzlů v jednom místě, mohou být zachována jejich různá ID, ale jsou přesunuta ke stejnému novému uzlovému bodu. To zachová vazby ramp a šířkových modifikací.
 
 Pro oranžovou variantu v dodaném DXF nebyly nalezeny žádné velké `CIRCLE` body. Skript proto pro W5 použije jasně označený fallback: staré uzlové členění promítne na novou oranžovou osu.
+
+
+## Aktuální režim 2026-11-08.6: jednoduché křižovatkové uzly
+
+Aktuální produkční logika je záměrně zjednodušená:
+
+- každý velký kruh = **jeden nový NODE**,
+- úsek nové osy mezi dvěma sousedními kruhy = **jeden nový hlavní LINK**,
+- rampy, větve MÚK, TURN, LANE a pomocné uzly se **nepřenášejí**,
+- stará geometry `.tra` se používá jen dočasně jako zdroj čísel a parametrů hlavních linků,
+- následně se znovu načte čistá `R1_VARIANTYBase.ver` a na ní se vytvoří pouze nový jednoduchý koridor.
+
+Pro zachování vazeb šířkových modifikací se skript snaží použít původní `LinkNo` dlouhých hlavních linků. Krátké interní linky MÚK se zahazují; pro N nových úseků se vybere N nejdelších hlavních fyzických linků odpovídající varianty.
+
+Nové uzly dostávají vlastní číselné bloky:
+- W1: 9911001+
+- W2: 9921001+
+- W3: 9931001+
+- W4: 9941001+
+- W5: 9951001+
+
+Oranžová varianta je nyní při prázdném souboru velkých kruhů přeskočena; skript pro ni nevymýšlí uzly ani rampy.
