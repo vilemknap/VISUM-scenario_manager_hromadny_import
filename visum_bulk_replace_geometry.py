@@ -448,6 +448,178 @@ def choose_candidate_window(groups, candidates):
     return best[2], best[1], best[0]
 
 
+
+def prepare_authoritative_node_mapping(
+    visum, groups, target, points, touched_nodes, match_radius
+):
+    tcum = cumlen(target)
+
+    auth = []
+    for i, p in enumerate(points, 1):
+        st, q, off = project(target, tcum, p["xy"])
+        auth.append({
+            "index": i,
+            "xy": tuple(p["xy"]),
+            "station": st,
+            "route_offset_m": off,
+        })
+    auth.sort(key=lambda x: x["station"])
+    for i, p in enumerate(auth, 1):
+        p["order"] = i
+
+    main_nodes = sorted({
+        n for g in groups for a, b in g["dirs"] for n in (a, b)
+    })
+    old_xy = {n: node_xy(visum, n) for n in main_nodes}
+
+    assignment = {}
+    for n in main_nodes:
+        if not auth:
+            assignment[n] = None
+            continue
+        best = min(auth, key=lambda p: d(old_xy[n], p["xy"]))
+        dd = d(old_xy[n], best["xy"])
+        assignment[n] = best if dd <= match_radius else None
+
+    clusters = {}
+    for n, p in assignment.items():
+        if p is not None:
+            clusters.setdefault(p["order"], []).append(n)
+
+    final_xy = {}
+    station = {}
+    mapped = []
+
+    # Uzly patri k jednomu velkemu kruhu jako cluster. Jeden master jde presne
+    # na autoritativni bod, ostatni si zachovaji lokalni relativni polohu, aby
+    # nevznikaly nulove linky uvnitr MUK.
+    for p in auth:
+        members = clusters.get(p["order"], [])
+        if not members:
+            continue
+
+        master = min(members, key=lambda n: d(old_xy[n], p["xy"]))
+        delta = (
+            p["xy"][0] - old_xy[master][0],
+            p["xy"][1] - old_xy[master][1],
+        )
+
+        for n in members:
+            new = (
+                old_xy[n][0] + delta[0],
+                old_xy[n][1] + delta[1],
+            )
+            final_xy[n] = new
+            station[n] = p["station"]
+            mapped.append({
+                "node_no": n,
+                "old_x": old_xy[n][0],
+                "old_y": old_xy[n][1],
+                "new_x": new[0],
+                "new_y": new[1],
+                "station_m": p["station"],
+                "snap_m": d(old_xy[n], new),
+                "role": "main_authoritative",
+                "is_touched_node": n in touched_nodes,
+                "authoritative_point": p["order"],
+                "cluster_master": master,
+            })
+
+    # Koncove/interface uzly, ktere nelezi u zadneho velkeho kruhu, zustavaji
+    # na svem miste. Jejich staniceni se jen promita na novou osu.
+    for n in main_nodes:
+        if n in final_xy:
+            continue
+        st, _q, _off = project(target, tcum, old_xy[n])
+        final_xy[n] = old_xy[n]
+        station[n] = st
+        mapped.append({
+            "node_no": n,
+            "old_x": old_xy[n][0],
+            "old_y": old_xy[n][1],
+            "new_x": old_xy[n][0],
+            "new_y": old_xy[n][1],
+            "station_m": st,
+            "snap_m": 0.0,
+            "role": "main_anchor",
+            "is_touched_node": n in touched_nodes,
+            "authoritative_point": None,
+            "cluster_master": None,
+        })
+
+    return auth, assignment, final_xy, station, mapped
+
+
+def _existing_link_course(visum, a, b):
+    try:
+        pts = parse_wkt_line(visum.Net.Links.ItemByKey(int(a), int(b)).AttValue("WKTPOLY"))
+    except Exception:
+        pts = []
+    if len(pts) < 2:
+        pts = [node_xy(visum, a), node_xy(visum, b)]
+    return pts
+
+
+def build_main_plan_from_authoritative_nodes(
+    visum, groups, target, assignment, final_xy, station
+):
+    tcum = cumlen(target)
+    plan = []
+    main_pairs = set()
+
+    for g in groups:
+        a0, b0 = g["dirs"][0]
+        pa = assignment.get(a0)
+        pb = assignment.get(b0)
+
+        same_cluster = (
+            pa is not None
+            and pb is not None
+            and pa["order"] == pb["order"]
+        )
+
+        if same_cluster:
+            # Vnitr jednoho kruhu/MUK zachovame lokalni tvar linky a pouze ji
+            # deformujeme podle posunu jejích koncovych uzlu.
+            old_course = _existing_link_course(visum, a0, b0)
+            old_a = node_xy(visum, a0)
+            old_b = node_xy(visum, b0)
+            da = (
+                final_xy[a0][0] - old_a[0],
+                final_xy[a0][1] - old_a[1],
+            )
+            db = (
+                final_xy[b0][0] - old_b[0],
+                final_xy[b0][1] - old_b[1],
+            )
+            base_course = warp_polyline(old_course, da, db)
+        else:
+            s0 = station[a0]
+            s1 = station[b0]
+            base_course = subline(target, tcum, s0, s1)
+            if len(base_course) < 2:
+                base_course = [final_xy[a0], final_xy[b0]]
+            base_course[0] = final_xy[a0]
+            base_course[-1] = final_xy[b0]
+
+        for a, b in g["dirs"]:
+            if (a, b) == (a0, b0):
+                course = list(base_course)
+            elif (a, b) == (b0, a0):
+                course = list(reversed(base_course))
+            else:
+                course = list(base_course)
+                if d(course[0], final_xy[a]) > d(course[-1], final_xy[a]):
+                    course.reverse()
+
+            course[0] = final_xy[a]
+            course[-1] = final_xy[b]
+            plan.append(make_plan_entry(a, b, course, g["no"], "main"))
+            main_pairs.add((a, b))
+
+    return plan, main_pairs
+
+
 def assign_main_nodes(visum, groups, segments, touched_nodes):
     desired = {}
     link_binding = []
@@ -974,18 +1146,7 @@ def process(visum, base_ver, tra, route, nodes_file, m, global_cfg, work):
     else:
         print("autoritativni uzly: NENALEZENY")
 
-    if points:
-        candidates = split_target_by_authoritative_points(
-            target,
-            points,
-            float(global_cfg.get("authoritative_point_merge_tolerance_m", 1.0)),
-        )
-        node_source = "large_circles"
-        print(
-            "nova topologie: %d autoritativnich velkych kruhu -> %d kandidatnich useku"
-            % (len(points), len(candidates))
-        )
-    else:
+    if not points:
         if not bool(m.get("allow_node_fallback", False)):
             expected = Path(m["route"]).stem + "_velke_kruhy_body_snap.geojson"
             detail = (
@@ -998,30 +1159,46 @@ def process(visum, base_ver, tra, route, nodes_file, m, global_cfg, work):
                 "Ocekavam v routes soubor %s. Fallback neni povolen."
                 % (m["code"], detail, expected)
             )
-        candidates = fallback_segments_from_old_topology(visum, groups, target)
+
+        # Oranzova: v puvodnim CAD nejsou velke kruhy. Vytvorime pseudo-body
+        # z projekci koncovych uzlu stareho hlavniho cleneni na novou osu.
+        tcum = cumlen(target)
+        tmp = []
+        seen = set()
+        for g in groups:
+            for a, b in g["dirs"]:
+                for n in (a, b):
+                    if n in seen:
+                        continue
+                    seen.add(n)
+                    st, q, off = project(target, tcum, node_xy(visum, n))
+                    tmp.append({"xy": q, "station": st, "order": None})
+        tmp.sort(key=lambda x: x["station"])
+        points = tmp
         node_source = "old_topology_projection"
         print(
-            "WARNING: pro %s nejsou velke kruhy; explicitne povolen fallback "
-            "projekce stareho cleneni na novou osu."
-            % m["code"]
+            "WARNING: %s nema velke kruhy; explicitne povolen fallback "
+            "projekce starych uzlu na novou osu (%d pseudo-bodu)."
+            % (m["code"], len(points))
         )
+    else:
+        node_source = "large_circles"
 
-    segments, window_start, window_cost = choose_candidate_window(groups, candidates)
-    print(
-        "vybrano %d novych useku (okno od %d, match cost %.1f m)"
-        % (len(segments), window_start + 1, window_cost)
-    )
-
-    bindings, final_xy, mapped = assign_main_nodes(
-        visum, groups, segments, touched_nodes
-    )
-
-    mapped = move_auxiliary_nodes(
+    auth, assignment, final_xy, station, mapped = prepare_authoritative_node_mapping(
         visum,
+        groups,
+        target,
+        points,
         touched_nodes,
-        final_xy,
-        mapped,
-        float(global_cfg.get("junction_cluster_radius_m", 2000.0)),
+        float(global_cfg.get("authoritative_node_match_radius_m", 1500.0)),
+    )
+
+    used_auth = sorted({
+        p["order"] for p in assignment.values() if p is not None
+    })
+    print(
+        "pouzite autoritativni body: %s; hlavni uzly: %d"
+        % (used_auth, len(final_xy))
     )
 
     max_move = max((r["snap_m"] for r in mapped), default=0.0)
@@ -1036,11 +1213,24 @@ def process(visum, base_ver, tra, route, nodes_file, m, global_cfg, work):
             )
         )
 
-    # Rampy/navazujici linky deformujeme z puvodni geometrie, proto plan
-    # sestavime jeste pred presunem uzlu.
-    main_plan, main_pairs, _main_nos = build_authoritative_main_plan(
-        bindings, final_xy
+    # Hlavni linky se vytvori z nove osy mezi novymi uzlovymi clustery.
+    # Kratke vnitrni linky jednoho MUK clusteru se pouze lokalne deformuji.
+    main_plan, main_pairs = build_main_plan_from_authoritative_nodes(
+        visum, groups, target, assignment, final_xy, station
     )
+
+    # Pomocne uzly puvodni modification (rampy, vetve MUK) se prenesou spolu
+    # s nejblizsim presunutym hlavnim uzlem.
+    mapped = move_auxiliary_nodes(
+        visum,
+        touched_nodes,
+        final_xy,
+        mapped,
+        float(global_cfg.get("junction_cluster_radius_m", 2000.0)),
+    )
+
+    # Rampove/navazujici linky deformujeme jeste pred samotnym presunem uzlu,
+    # aby bylo mozne precist jejich puvodni geometrii.
     adjacent_plan = build_adjacent_link_warp_plan(visum, mapped, main_pairs)
     plan = main_plan + adjacent_plan
 
@@ -1075,7 +1265,6 @@ def process(visum, base_ver, tra, route, nodes_file, m, global_cfg, work):
     if not canonical.exists() or canonical.stat().st_size < 100:
         raise RuntimeError("Nevznikla platna canonical TRA: %s" % canonical)
 
-    # Nezavisla kontrola nove TRA na ciste base version.
     visum.IO.LoadVersion(str(base_ver))
     visum.ApplyModelTransferFile(str(canonical))
     verify_nodes(visum, mapped, tol)
@@ -1099,9 +1288,8 @@ def process(visum, base_ver, tra, route, nodes_file, m, global_cfg, work):
         "links": link_rows,
         "max_node_move_m": max_move,
         "physical_main_links": len(groups),
-        "candidate_segments": len(candidates),
-        "selected_segment_window_start": window_start + 1,
-        "selected_segment_window_cost_m": window_cost,
+        "authoritative_points_total": len(auth),
+        "authoritative_points_used": used_auth,
         "warped_adjacent_directional_links": len(adjacent_plan),
     }
 
