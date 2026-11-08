@@ -24,7 +24,8 @@
       "route": "variant_2_fialova.geojson",
       "color": "Fialová",
       "identity": "14AF",
-      "nodes": "variant_2_fialova_velke_kruhy_body_snap.geojson"
+      "nodes": "variant_2_fialova_velke_kruhy_body_snap.geojson",
+      "allow_node_fallback": false
     },
     {
       "code": "G_W2",
@@ -32,7 +33,8 @@
       "route": "variant_3_zelena.geojson",
       "color": "Zelená",
       "identity": "1E11",
-      "nodes": "variant_3_zelena_velke_kruhy_body_snap.geojson"
+      "nodes": "variant_3_zelena_velke_kruhy_body_snap.geojson",
+      "allow_node_fallback": false
     },
     {
       "code": "G_W3",
@@ -40,7 +42,8 @@
       "route": "variant_5_hneda.geojson",
       "color": "Hnědá",
       "identity": "26B3",
-      "nodes": "variant_5_hneda_velke_kruhy_body_snap.geojson"
+      "nodes": "variant_5_hneda_velke_kruhy_body_snap.geojson",
+      "allow_node_fallback": false
     },
     {
       "code": "G_W4",
@@ -48,7 +51,8 @@
       "route": "variant_4_modra.geojson",
       "color": "Modrá",
       "identity": "2E29",
-      "nodes": "variant_4_modra_velke_kruhy_body_snap.geojson"
+      "nodes": "variant_4_modra_velke_kruhy_body_snap.geojson",
+      "allow_node_fallback": false
     },
     {
       "code": "G_W5",
@@ -56,7 +60,8 @@
       "route": "variant_6_oranzova.geojson",
       "color": "Oranžová",
       "identity": "3156",
-      "nodes": "variant_6_oranzova_velke_kruhy_body_snap.geojson"
+      "nodes": "variant_6_oranzova_velke_kruhy_body_snap.geojson",
+      "allow_node_fallback": true
     }
   ],
   "authoritative_point_merge_tolerance_m": 1,
