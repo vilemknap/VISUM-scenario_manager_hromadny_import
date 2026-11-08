@@ -6,57 +6,60 @@
   "routes_dir": "routes",
   "work_dir": "_geometry_update_work",
   "backup_dir": "backup_geometry_modifications",
-
   "route_type_attribute": "TYP",
   "route_type_value": "hlavni_krivka",
   "route_color_attribute": "BARVA",
   "route_identity_attribute": "ENTITYHAND",
-
-  "max_route_node_snap_m": 3000.0,
-  "max_endpoint_snap_m": 3000.0,
-  "max_station_backtrack_m": 50.0,
-  "main_path_max_backtrack_m": 250.0,
+  "max_route_node_snap_m": 3000,
+  "max_endpoint_snap_m": 3000,
+  "max_station_backtrack_m": 50,
+  "main_path_max_backtrack_m": 250,
   "minimum_route_node_spacing_m": 0.25,
-  "geometry_verification_tolerance_m": 2.0,
-
+  "geometry_verification_tolerance_m": 2,
   "set_link_length_from_geometry": true,
   "coordinate_m_to_length_unit": 0.001,
-
   "modifications": [
     {
       "code": "G_W1_oprava",
       "tra": "M000021.tra",
       "route": "variant_2_fialova.geojson",
       "color": "Fialova",
-      "identity": "14AF"
+      "identity": "14AF",
+      "nodes": "variant_2_fialova_velke_kruhy_body_snap.geojson"
     },
     {
       "code": "G_W2",
       "tra": "M000002.tra",
       "route": "variant_3_zelena.geojson",
       "color": "Zelena",
-      "identity": "1E11"
+      "identity": "1E11",
+      "nodes": "variant_3_zelena_velke_kruhy_body_snap.geojson"
     },
     {
       "code": "G_W3",
       "tra": "M000003.tra",
       "route": "variant_5_hneda.geojson",
       "color": "Hneda",
-      "identity": "26B3"
+      "identity": "26B3",
+      "nodes": "variant_5_hneda_velke_kruhy_body_snap.geojson"
     },
     {
       "code": "G_W4",
       "tra": "M000004.tra",
       "route": "variant_4_modra.geojson",
       "color": "Modra",
-      "identity": "2E29"
+      "identity": "2E29",
+      "nodes": "variant_4_modra_velke_kruhy_body_snap.geojson"
     },
     {
       "code": "G_W5",
       "tra": "M000005.tra",
       "route": "variant_6_oranzova.geojson",
       "color": "Oranzova",
-      "identity": "3156"
+      "identity": "3156",
+      "nodes": "variant_6_oranzova_velke_kruhy_body_snap.geojson"
     }
-  ]
+  ],
+  "authoritative_point_merge_tolerance_m": 1,
+  "junction_cluster_radius_m": 2000
 }
