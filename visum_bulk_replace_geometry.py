@@ -963,11 +963,14 @@ def build_plan(model, mod_cfg, cfg, width_tras, inputs, alloc, all_node_xy, net_
                                "station_from_m": round(nl["sa"], 1), "station_to_m": round(nl["sb"], 1),
                                "attributes_from_old_link": nl["old_no"], "identity": nl["identity"]})
     plan.old_dir_to_new = collections.defaultdict(list)
-    for nl in new_links:
-        if nl.get("tmpl") or nl.get("rows"):
-            continue
-        for (a, b) in ((nl["a"], nl["b"]), (nl["b"], nl["a"])):
-            plan.old_dir_to_new[plan.link_match[(a, b)]].append((nl["no"], a, b))
+    def fill_old_dir_to_new():
+        plan.old_dir_to_new = collections.defaultdict(list)
+        for nl in new_links:
+            if nl.get("rows"):
+                continue   # sablona z jine modifikace - sirkove radky nema
+            for (a, b) in ((nl["a"], nl["b"]), (nl["b"], nl["a"])):
+                plan.old_dir_to_new[plan.link_match[(a, b)]].append((nl["no"], a, b))
+    fill_old_dir_to_new()
 
     # ---------- slepe konce osy -> napojit na nejblizsi stavajici uzel -------
     def degree():
@@ -1006,6 +1009,7 @@ def build_plan(model, mod_cfg, cfg, width_tras, inputs, alloc, all_node_xy, net_
                                    "attributes_from_old_link": e["old_no"], "identity": e["identity"]})
             plan.warnings.append("%s: konec nove osy (uzel %d) napojen na nejblizsi stavajici uzel %d (%.0f m) linkem %d"
                                  % (plan.code, n, near[0], near[1], e["no"]))
+    fill_old_dir_to_new()
     deg = degree()
     for n in new_nodes:
         if deg[n] <= 1:
@@ -1288,6 +1292,8 @@ def map_width_tables(wtra, plan, model):
                             r2[t.idx["NO"]] = str(nno)
                         nt.rows.append(r2)
                     stats["hlavni->nove (%s)" % t.tag()] += len(targets)
+                    if not targets:
+                        log.append((t.tag(), "%d-%d" % key, "VAROVANI: stary hlavni smer nema zadny novy link"))
                     log.append((t.tag(), "%d-%d" % key, "hlavni trasa -> %d novych smerovych linku" % len(targets)))
                     continue
                 if key in carriage_dirs:
