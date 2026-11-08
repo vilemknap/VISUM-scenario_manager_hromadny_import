@@ -966,6 +966,12 @@ def process(visum, base_ver, tra, route, nodes_file, m, global_cfg, work):
     points = []
     if nodes_file is not None and Path(nodes_file).exists():
         points = load_geojson_points(nodes_file)
+        print(
+            "autoritativni uzly: %s -> %d bodu"
+            % (nodes_file, len(points))
+        )
+    else:
+        print("autoritativni uzly: NENALEZENY")
 
     if points:
         candidates = split_target_by_authoritative_points(
@@ -1119,15 +1125,33 @@ def main():
                 raise RuntimeError("Chybi %s v modification %r" % (key, m))
         tra = path_resolve(m["tra"], tra_dir)
         route = path_resolve(m["route"], routes_dir)
+
+        # Autoritativni uzly se primarne berou z explicitniho "nodes".
+        # Pokud chybi, odvodime je automaticky z nazvu cele trasy:
+        # variant_2_fialova.geojson
+        # -> variant_2_fialova_velke_kruhy_body_snap.geojson
         nodes_file = None
         if m.get("nodes"):
             nodes_file = path_resolve(m["nodes"], routes_dir)
+        else:
+            stem = Path(m["route"]).stem
+            inferred_name = stem + "_velke_kruhy_body_snap.geojson"
+            inferred = path_resolve(inferred_name, routes_dir)
+            if inferred.exists():
+                nodes_file = inferred
+                m["nodes"] = inferred_name
+                print(
+                    "INFO: %s nema 'nodes' v configu; automaticky pouzivam %s"
+                    % (m["code"], inferred_name)
+                )
+
         if not tra.exists():
             raise RuntimeError("Nenalezena TRA: %s" % tra)
         if not route.exists():
             raise RuntimeError("Nenalezena trasa: %s" % route)
         if nodes_file is not None and not nodes_file.exists():
             raise RuntimeError("Nenalezen soubor autoritativnich uzlu: %s" % nodes_file)
+
         resolved.append((m, tra, route, nodes_file))
 
     print("R1 VISUM bulk geometry replacement")
@@ -1135,6 +1159,27 @@ def main():
     print("base: %s" % base_ver)
     print("work: %s" % work)
     print("VPDB se timto skriptem nikdy nemeni.")
+    print("")
+    print("PREFLIGHT vstupu:")
+    for m, tra, route, nodes_file in resolved:
+        print(
+            "  %s | TRA=%s | ROUTE=%s | NODES=%s"
+            % (
+                m["code"],
+                tra,
+                route,
+                nodes_file if nodes_file is not None else "<nenalezeno>",
+            )
+        )
+        if nodes_file is not None:
+            try:
+                npts = len(load_geojson_points(nodes_file))
+                print("      pocet autoritativnich bodu: %d" % npts)
+            except Exception as exc:
+                raise RuntimeError(
+                    "Nelze nacist autoritativni uzly %s: %s"
+                    % (nodes_file, exc)
+                )
 
     visum = get_visum()
     results = []
