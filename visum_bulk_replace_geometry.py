@@ -27,7 +27,7 @@ import traceback
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 CONFIG = SCRIPT_DIR / "config.json"
-SCRIPT_VERSION = "2026-11-08.4-topology-nodes"
+SCRIPT_VERSION = "2026-11-08.5-shared-junction-clusters"
 
 
 def norm(v):
