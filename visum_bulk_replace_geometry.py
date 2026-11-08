@@ -387,6 +387,7 @@ DEFAULTS = {
     "junction_fallback_when_no_circles": True,
     "junction_match_station_m": 1500.0,
     "junction_cluster_m": 600.0,
+    "endpoint_connect_existing_m": 300.0,
     "extra_connectors": [],
     "endpoint_snap_to_any_node_m": 5.0,
     "max_old_route_offset_median_m": 5000.0,
@@ -641,6 +642,9 @@ def build_plan(model, mod_cfg, cfg, width_tras, inputs, alloc, all_node_xy, net_
     plan.trim_rows = []
     plan.dead_end_candidates = []
 
+    trim = bool(mod_cfg.get("trim_to_old_extent", cfg.get("trim_to_old_extent", True)))
+    plan.trim = trim
+    plan.replace_existing_route = bool(mod_cfg.get("replace_old_route_on_existing_network", not trim))
     for part in inputs:
         ident = part["identity"]
         chains = chain_lines(part["lines"], float(cfg["line_join_tolerance_m"]))
@@ -669,7 +673,7 @@ def build_plan(model, mod_cfg, cfg, width_tras, inputs, alloc, all_node_xy, net_
                         on_anchors.append((s, off, a))
             old_st = [project(c, cum, p)[0] for no in part_main for p in model.geometry(*model.link_nodes(no))]
             s0, s1, term0, term1 = 0.0, L, None, None
-            if cfg.get("trim_to_old_extent", True) and old_st and on_anchors:
+            if trim and old_st and on_anchors:
                 lo, hi = min(old_st), max(old_st)
                 win = float(cfg["trim_anchor_window_m"])
                 cand = [x for x in on_anchors if abs(x[0] - lo) <= win]
@@ -715,31 +719,37 @@ def build_plan(model, mod_cfg, cfg, width_tras, inputs, alloc, all_node_xy, net_
                                          % (plan.code, s))
                     continue
                 stops.append([s, q, "velky_kruh", None])
-            if not pts and cfg.get("junction_fallback_when_no_circles", True):
-                # varianta bez velkych kruhu: uzly v prumetu starych mist napojeni
+            # mista napojeni stavajici site, u kterych neni velky kruh -> novy uzel v jejich prumetu
+            if cfg.get("junction_fallback_when_no_circles", True):
+                lim_ = float(cfg["junction_match_station_m"])
                 proj = []
-                for b, lst in contacts.items():
-                    if b in anchors or b not in xy0:
+                for b_, lst in contacts.items():
+                    if b_ in (term0, term1) or b_ not in xy0:
                         continue
-                    x = lst[0][1]
-                    p = model.node_xy.get(x, xy0[b])
+                    lno, x = lst[0]
+                    p = xy0[b_] if lno in main else model.node_xy.get(x, xy0[b_])
+                    if main.get(lno, nid.get(x, ident)) != ident:
+                        continue
                     s, off, _q = project(c, cum, p)
-                    if s0 + anchor_merge < s < s1 - anchor_merge:
-                        proj.append(s)
+                    if not (s0 + anchor_merge < s < s1 - anchor_merge):
+                        continue
+                    if any(abs(st[0] - s) <= lim_ for st in stops):
+                        continue
+                    proj.append((s, b_))
                 proj.sort()
                 cl = []
-                for s in proj:
-                    if cl and s - cl[-1][-1] <= float(cfg["junction_cluster_m"]):
-                        cl[-1].append(s)
+                for s, b_ in proj:
+                    if cl and s - cl[-1][-1][0] <= float(cfg["junction_cluster_m"]):
+                        cl[-1].append((s, b_))
                     else:
-                        cl.append([s])
+                        cl.append([(s, b_)])
                 for g in cl:
-                    s = sum(g) / len(g)
-                    stops.append([s, point_at(c, cum, s), "nahradni_uzel_bez_kruhu", None])
-                if cl:
-                    plan.warnings.append("%s / %s: varianta nema velke kruhy - %d uzlu vytvoreno v prumetu starych "
-                                         "mist napojeni (vypnete junction_fallback_when_no_circles, pokud nechcete)"
-                                         % (plan.code, ident, len(cl)))
+                    s = sum(x[0] for x in g) / len(g)
+                    stops.append([s, point_at(c, cum, s), "novy_uzel_bez_kruhu", None])
+                    plan.warnings.append(
+                        "%s / %s: stavajici uzly %s byly napojeny na starou trasu a do %.0f m neni velky kruh -> "
+                        "novy uzel v prumetu na novou osu (staniceni %.0f m)"
+                        % (plan.code, ident, ",".join(str(x[1]) for x in g), lim_, s))
             stops.append([s0, xy0[term0] if term0 else point_at(c, cum, s0), "zacatek", term0])
             stops.append([s1, xy0[term1] if term1 else point_at(c, cum, s1), "konec", term1])
             stops.sort(key=lambda x: x[0])
@@ -859,35 +869,56 @@ def build_plan(model, mod_cfg, cfg, width_tras, inputs, alloc, all_node_xy, net_
         for (df, dt_, nf, nt) in r["dirs"]:
             plan.remap_dir[(df, dt_)] = (r["no"], nf, nt)
 
-    deg = collections.Counter()
-    for nl in new_links:
-        deg[nl["a"]] += 1
-        deg[nl["b"]] += 1
-    for r in remapped:
-        deg[r["nf"]] += 1
-        deg[r["nt"]] += 1
-    for n in new_nodes:
-        if deg[n] <= 1:
-            plan.warnings.append("%s: novy uzel %d [%.1f, %.1f] je slepy konec (zadne napojeni na stavajici sit)"
-                                 % (plan.code, n, xy_all[n][0], xy_all[n][1]))
-        elif deg[n] == 2 and new_nodes[n]["source"] == "velky_kruh":
-            plan.warnings.append("%s: na velky kruh / uzel %d se zatim nenapojuje zadna stavajici sit"
-                                 % (plan.code, n))
-
+    ends = {}
+    for pc in part_curves:
+        ends.setdefault("zacatek", pc["stops"][0][1])
+        ends["konec"] = pc["stops"][-1][1]
     for ec in list(cfg.get("extra_connectors") or []) + list(mod_cfg.get("extra_connectors") or []):
         a = int(ec["node"])
+        if a not in xy_all:
+            raise Fail("%s: extra_connectors %r - uzel %d v siti neexistuje" % (plan.code, ec, a))
+        to = ec.get("to")
+        if to in ("konec", "zacatek", "end", "start"):
+            target = ends[{"end": "konec", "start": "zacatek"}.get(to, to)]
+        elif to:
+            target = int(to)
+        else:
+            target = min([n for n in stop_nodes if n != a], key=lambda n: dist(xy_all[n], xy_all[a]))
         tmpl_no = int(ec["template_link"])
-        if a not in xy_all or tmpl_no not in model.links:
-            raise Fail("%s: extra_connectors %r - uzel nebo sablonovy link neexistuje" % (plan.code, ec))
-        target = int(ec["to"]) if ec.get("to") else min(
-            [n for n in stop_nodes if n != a], key=lambda n: dist(xy_all[n], xy_all[a]))
-        tf, tt = model.link_nodes(tmpl_no)
-        nl = {"no": alloc["link"], "a": a, "b": target, "pts": [xy_all[a], xy_all[target]],
-              "kind": "extra_connector", "identity": identities[0], "sa": 0, "sb": 0, "chain": -1,
-              "tmpl": {(a, target): (tf, tt), (target, a): (tt, tf) if (tt, tf) in model.dir_rows else (tf, tt)}}
+        if ec.get("template_tra"):
+            src_tra = Tra(resolve(ec["template_tra"], model.tra.path.parent))
+            src_lt = src_tra.table("+LINK")
+            rows = [r for r in (src_lt.rows if src_lt else []) if to_int(src_lt.get(r, "NO")) == tmpl_no]
+            if not rows:
+                raise Fail("%s: extra_connectors - link %d neni v %s" % (plan.code, tmpl_no, ec["template_tra"]))
+            dict_rows = [dict(zip(src_lt.header, r)) for r in rows]
+            lane_t = src_tra.table("+LANE")
+            lanes = {}
+            for d in dict_rows:
+                key = (to_int(d["FROMNODENO"]), to_int(d["TONODENO"]))
+                lanes[key] = [dict(zip(lane_t.header, r)) for r in (lane_t.rows if lane_t else [])
+                              if (to_int(lane_t.get(r, "FROMNODENO")), to_int(lane_t.get(r, "TONODENO"))) == key]
+            d0 = dict_rows[0]
+            d1 = dict_rows[1] if len(dict_rows) > 1 else d0
+            k0 = (to_int(d0["FROMNODENO"]), to_int(d0["TONODENO"]))
+            k1 = (to_int(d1["FROMNODENO"]), to_int(d1["TONODENO"]))
+            nl = {"no": alloc["link"], "a": a, "b": target, "pts": [xy_all[a], xy_all[target]],
+                  "kind": "extra_connector", "identity": identities[0], "sa": 0, "sb": 0, "chain": -1,
+                  "rows": {(a, target): d0, (target, a): d1},
+                  "lanes": {(a, target): lanes.get(k0, []), (target, a): lanes.get(k1, [])},
+                  "old_no": tmpl_no}
+        else:
+            if tmpl_no not in model.links:
+                raise Fail("%s: extra_connectors %r - sablonovy link %d neni v %s (pouzijte template_tra)"
+                           % (plan.code, ec, tmpl_no, model.tra.path.name))
+            tf, tt = model.link_nodes(tmpl_no)
+            nl = {"no": alloc["link"], "a": a, "b": target, "pts": [xy_all[a], xy_all[target]],
+                  "kind": "extra_connector", "identity": identities[0], "sa": 0, "sb": 0, "chain": -1,
+                  "tmpl": {(a, target): (tf, tt), (target, a): (tt, tf) if (tt, tf) in model.dir_rows else (tf, tt)}}
         alloc["link"] += 1
         new_links.append(nl)
-        plan.warnings.append("%s: extra_connectors - novy link %d mezi %d a %d" % (plan.code, nl["no"], a, target))
+        plan.warnings.append("%s: extra_connectors - novy link %d mezi %d a %d (%.0f m)"
+                             % (plan.code, nl["no"], a, target, dist(xy_all[a], xy_all[target])))
 
     # ---------- atributy novych linku trasy podle staniceni starych ----------
     old_intervals = []
@@ -906,6 +937,12 @@ def build_plan(model, mod_cfg, cfg, width_tras, inputs, alloc, all_node_xy, net_
     plan.link_match, plan.link_rows = {}, []
     for nl in new_links:
         nl["len"] = line_len(nl["pts"])
+        if nl.get("rows"):
+            plan.link_rows.append({"modification": plan.code, "new_link": nl["no"], "kind": nl["kind"],
+                                   "from_node": nl["a"], "to_node": nl["b"], "length_m": round(nl["len"], 1),
+                                   "station_from_m": "", "station_to_m": "",
+                                   "attributes_from_old_link": nl["old_no"], "identity": nl["identity"]})
+            continue
         if nl.get("tmpl"):
             plan.link_match.update(nl["tmpl"])
             nl["old_no"] = to_int(model.link_table.get(
@@ -926,10 +963,57 @@ def build_plan(model, mod_cfg, cfg, width_tras, inputs, alloc, all_node_xy, net_
                                "attributes_from_old_link": nl["old_no"], "identity": nl["identity"]})
     plan.old_dir_to_new = collections.defaultdict(list)
     for nl in new_links:
-        if nl.get("tmpl"):
+        if nl.get("tmpl") or nl.get("rows"):
             continue
         for (a, b) in ((nl["a"], nl["b"]), (nl["b"], nl["a"])):
             plan.old_dir_to_new[plan.link_match[(a, b)]].append((nl["no"], a, b))
+
+    # ---------- slepe konce osy -> napojit na nejblizsi stavajici uzel -------
+    def degree():
+        d = collections.Counter()
+        for nl in new_links:
+            d[nl["a"]] += 1
+            d[nl["b"]] += 1
+        for r in remapped:
+            d[r["nf"]] += 1
+            d[r["nt"]] += 1
+        return d
+    deg = degree()
+    tolEnd = float(cfg["endpoint_connect_existing_m"])
+    for pc in part_curves:
+        for idx in (0, -1):
+            n = pc["stops"][idx][1]
+            if n not in new_nodes or deg[n] > 1:
+                continue
+            near = nearest_existing(xy_all[n], tolEnd)
+            if near is None or frozenset((n, near[0])) in used_pairs:
+                continue
+            adj = [nl for nl in new_links if n in (nl["a"], nl["b"]) and not nl.get("rows")][0]
+            other = adj["b"] if adj["a"] == n else adj["a"]
+            e = {"no": alloc["link"], "a": n, "b": near[0], "pts": [xy_all[n], xy_all[near[0]]],
+                 "kind": "napojeni_konce_osy", "identity": adj["identity"], "sa": 0, "sb": 0, "chain": -1,
+                 "tmpl": {(n, near[0]): plan.link_match[(other, n)], (near[0], n): plan.link_match[(n, other)]}}
+            alloc["link"] += 1
+            e["len"] = line_len(e["pts"])
+            e["old_no"] = adj.get("old_no")
+            plan.link_match.update(e["tmpl"])
+            new_links.append(e)
+            used_pairs.add(frozenset((n, near[0])))
+            plan.link_rows.append({"modification": plan.code, "new_link": e["no"], "kind": e["kind"],
+                                   "from_node": n, "to_node": near[0], "length_m": round(e["len"], 1),
+                                   "station_from_m": "", "station_to_m": "",
+                                   "attributes_from_old_link": e["old_no"], "identity": e["identity"]})
+            plan.warnings.append("%s: konec nove osy (uzel %d) napojen na nejblizsi stavajici uzel %d (%.0f m) linkem %d"
+                                 % (plan.code, n, near[0], near[1], e["no"]))
+    deg = degree()
+    for n in new_nodes:
+        if deg[n] <= 1:
+            plan.warnings.append("%s: novy uzel %d [%.1f, %.1f] je SLEPY KONEC (zadne napojeni na stavajici sit). "
+                                 "Napojeni doplnte v config.json pres extra_connectors."
+                                 % (plan.code, n, xy_all[n][0], xy_all[n][1]))
+        elif deg[n] == 2 and new_nodes[n]["source"] == "velky_kruh":
+            plan.warnings.append("%s: na velky kruh / uzel %d se zatim nenapojuje zadna stavajici sit"
+                                 % (plan.code, n))
 
     # ---------- objekty (scitaci profily) na starych linkach ------------------
     plan.extra_tables = []
@@ -1022,6 +1106,16 @@ def plan_patch_tables(plan, model):
             ap.rows.append(row)
 
     for nl in plan.new_links:
+        if nl.get("rows"):
+            for (a, b) in ((nl["a"], nl["b"]), (nl["b"], nl["a"])):
+                d = nl["rows"][(a, b)]
+                r = [d.get(c, "") for c in lt.header]
+                r[lt.idx["NO"]], r[lt.idx["FROMNODENO"]], r[lt.idx["TONODENO"]] = str(nl["no"]), str(a), str(b)
+                if "LENGTH" in lt.idx:
+                    r[lt.idx["LENGTH"]] = km(nl["len"])
+                al.rows.append(r)
+            add_poly(nl["a"], nl["b"], nl["pts"])
+            continue
         for (a, b) in ((nl["a"], nl["b"]), (nl["b"], nl["a"])):
             src = model.dir_rows[plan.link_match[(a, b)]]
             r = list(src)
@@ -1054,7 +1148,13 @@ def plan_patch_tables(plan, model):
                 lt2.rows.append(r2)
         for nl in plan.new_links:
             for (a, b) in ((nl["a"], nl["b"]), (nl["b"], nl["a"])):
-                add_lanes(plan.link_match[(a, b)], a, b)
+                if nl.get("rows"):
+                    for d in nl["lanes"][(a, b)]:
+                        r2 = [d.get(c, "") for c in lane_t.header]
+                        r2[lane_t.idx["FROMNODENO"]], r2[lane_t.idx["TONODENO"]] = str(a), str(b)
+                        lt2.rows.append(r2)
+                else:
+                    add_lanes(plan.link_match[(a, b)], a, b)
         for rc in plan.remapped:
             for (df, dt_, nf, nt_) in rc["dirs"]:
                 add_lanes((df, dt_), nf, nt_)
@@ -1140,6 +1240,36 @@ def map_width_tables(wtra, plan, model):
     for no in plan.dropped_connectors:
         dropped_dirs.update(model.links[no])
 
+    # stara trasa vedena po STAVAJICI siti (upgrade + uzavreni okolnich silnic) - pri uplne
+    # nahrade trasy se tyto radky vypusti, silnice se vrati do stavu v base siti.
+    old_on_existing = set()
+    if getattr(plan, "replace_existing_route", False):
+        lk = wtra.table("*LINK")
+        if lk is not None:
+            mtypes = collections.Counter(lk.get(r, "TYPENO") for r in lk.rows
+                                         if to_int(lk.get(r, "NO")) in plan.old_main and lk.get(r, "TYPENO") != "")
+            mtype = mtypes.most_common(1)[0][0] if mtypes else None
+            base_rows = [(to_int(lk.get(r, "NO")), to_int(lk.get(r, "FROMNODENO")), to_int(lk.get(r, "TONODENO")),
+                          lk.get(r, "TYPENO"), lk.get(r, "TSYSSET")) for r in lk.rows
+                         if to_int(lk.get(r, "NO")) not in model.links]
+            parent = {}
+
+            def find(x):
+                while parent.setdefault(x, x) != x:
+                    x = parent[x]
+                return x
+            for (_no, f, t2, _ty, _ts) in base_rows:
+                parent[find(f)] = find(t2)
+            route_nodes = set(n for no in plan.route_links for n in model.link_nodes(no))
+            good = set()
+            for (_no, f, t2, ty, ts) in base_rows:
+                if (mtype is not None and ty == mtype and ts != "") or f in route_nodes or t2 in route_nodes:
+                    good.add(find(f))
+            for (_no, f, t2, _ty, _ts) in base_rows:
+                if find(f) in good:
+                    old_on_existing.add((f, t2))
+                    old_on_existing.add((t2, f))
+
     for t in wtra.tables:
         if t.name == "VERSION":
             continue
@@ -1162,6 +1292,10 @@ def map_width_tables(wtra, plan, model):
                 if key in carriage_dirs:
                     stats["vypusteno smazany stary link MUK/rampy (%s)" % t.tag()] += 1
                     log.append((t.tag(), "%d-%d" % key, "stary link MUK/rampy/pasu smazan - radek vypusten"))
+                    continue
+                if key in old_on_existing:
+                    stats["vypusteno stara trasa po stavajici siti (%s)" % t.tag()] += 1
+                    log.append((t.tag(), "%d-%d" % key, "stara trasa po stavajici siti - vraceno do base"))
                     continue
                 if key in plan.merged_dirs:
                     stats["vypusteno slouceny smer rampy (%s)" % t.tag()] += 1

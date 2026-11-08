@@ -32,14 +32,23 @@ Pro každou variantu:
 9. V režimu `apply` udělá zálohu a přepíše `.tra` soubory. **`R1_VARIANTY.vpdb` se nikdy nezapisuje**, takže všech 69 scénářů zůstane navázaných.
 
 ### Rozsah náhrady
-Nové osy jsou celé trasy (35–46 km). Stará modifikace měla novou trasu jen mezi stávajícími napojovacími uzly
-(např. 9200065 ~ 0,5 km od začátku osy, u fialové 1002957 → 1002655). Skript proto použije novou osu jen v tomto úseku
-(`trim_to_old_extent`). Zbytek je ve scénářích dál tvořen stávající sítí. Velké kruhy mimo úsek se vynechají a skript je vypíše.
+- **Fialová (`G_W1_oprava`) se nahrazuje celá (43 km)** (`"trim_to_old_extent": false`). Stará fialová vedla v úseku ~15–43 km
+  po stávajících silnicích, které W1_S1/S2/S3 upgradovaly na dálnici a uzavíraly okolní napojení
+  (2001801, 2001825, 2002262, 2002261, 2002238, 2001839, 2002160, …). Tyto řádky se z W1 šířkových modifikací vypustí,
+  takže se silnice vrátí do stavu v base síti. Konce nové osy se napojí na nejbližší stávající uzel do 300 m
+  (`endpoint_connect_existing_m`).
+- **Ostatní varianty**: nová osa se použije od stávajícího napojovacího uzlu 9200065 (~0,4 km od začátku osy) do konce,
+  protože tam začínala i stará modifikace. Zbytek osy je ve scénářích stávající síť.
 
-### Velké kruhy
-- Kruh do 150 m od stávajícího koncového uzlu (např. 1002957) se sloučí s tímto uzlem.
-- Stávající uzel, který byl napojen na starou trasu, ale do 1500 m staničení nemá žádný velký kruh, se **nepřipojí**. Skript ho vypíše v upozorněních a v `napojeni_stavajici_site.csv`.
-- Oranžová varianta nemá v DXF žádné velké kruhy. Skript proto pro ni vytvoří uzly v průmětu starých míst napojení. Vypnete to pomocí `"junction_fallback_when_no_circles": false`.
+### Velké kruhy a napojení
+- Na každém velkém kruhu vznikne nový uzel.
+- Kruh do 150 m od stávajícího koncového uzlu (např. 9200065) se sloučí s tímto uzlem.
+- Stávající uzel, který byl napojen na starou trasu, se napojí na nejbližší velký kruh do 1500 m staničení.
+  **Když tam žádný kruh není, vznikne nový uzel v průmětu staré křižovatky na novou osu** a napojí se na něj
+  (např. 1001981 u zelené ve staničení ~8,4 km). Oranžová nemá žádné kruhy, takže takto vzniknou všechny její uzly.
+- **Hnědá**: na konci osy vznikne nový uzel a napojí se na 1003317 a 1003323 stejně jako dříve oranžová.
+  Atributy se převezmou z oranžových linků 9800868/9800869 (`extra_connectors` v configu).
+- Velké kruhy, na které se zatím nenapojuje žádná stávající silnice, skript vypíše v upozorněních.
 
 ## Spuštění
 
@@ -79,14 +88,15 @@ Otevřete `R1_VARIANTY.vpdb`, načtěte např. scénář `W2_S1_2040` a zkontrol
 
 | klíč | význam | výchozí |
 |---|---|---|
-| `trim_to_old_extent` | novou osu použít jen v úseku staré modifikace | `true` |
 | `endpoint_snap_to_old_anchor_m` | max. vzdálenost stávajícího koncového uzlu od osy | 500 |
 | `circle_merge_into_anchor_m` | kruh tak blízko koncového uzlu = tentýž uzel | 150 |
 | `circle_max_offset_m` | max. vzdálenost kruhu od osy (jinak chyba) | 50 |
 | `junction_match_station_m` | max. rozdíl staničení mezi starým napojením a velkým kruhem | 1500 |
-| `junction_fallback_when_no_circles` | varianta bez kruhů → uzly v průmětu starých napojení | `true` |
+| `junction_fallback_when_no_circles` | stávající napojení bez velkého kruhu → nový uzel v průmětu | `true` |
 | `keep_links` | čísla linků ze staré modifikace, které se nemají mazat | `[]` |
-| `extra_connectors` | ruční napojení: `{"node": 1003317, "template_link": 9800848}` (volitelně `"to": <nový uzel>`) | `[]` |
+| `trim_to_old_extent` (i per varianta) | `false` = nahradit celou osu | `true`, u fialové `false` |
+| `endpoint_connect_existing_m` | slepý konec nové osy napojit na stávající uzel do této vzdálenosti | 300 |
+| `extra_connectors` | ruční napojení: `{"node": 1003317, "to": "konec", "template_tra": "M000005.tra", "template_link": 9800868}`; `to` = číslo uzlu / `"konec"` / `"zacatek"` / vynechat (nejbližší nový uzel) | hnědá: 1003317, 1003323 |
 | `new_node_no_start`, `new_link_no_start` | první nové číslo uzlu/linku (`auto` = nad maximem v base i všech `.tra`) | `auto` |
 
 Per-variantu lze `keep_links` a `extra_connectors` zapsat i přímo do položky v `geometry_modifications`.

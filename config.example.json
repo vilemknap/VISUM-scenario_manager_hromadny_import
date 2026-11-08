@@ -11,6 +11,7 @@
     {
       "code": "G_W1_oprava",
       "tra": "M000021.tra",
+      "trim_to_old_extent": false,
       "parts": [
         {"identity": "14AF", "route": "variant_2_fialova.geojson", "nodes": "variant_2_fialova_velke_kruhy_body_snap.geojson"}
       ]
@@ -25,6 +26,10 @@
     {
       "code": "G_W3",
       "tra": "M000003.tra",
+      "extra_connectors": [
+        {"node": 1003317, "to": "konec", "template_tra": "M000005.tra", "template_link": 9800868},
+        {"node": 1003323, "to": "konec", "template_tra": "M000005.tra", "template_link": 9800869}
+      ],
       "parts": [
         {"identity": "26B3", "route": "variant_5_hneda.geojson", "nodes": "variant_5_hneda_velke_kruhy_body_snap.geojson"}
       ]
@@ -59,13 +64,10 @@
   "circle_max_offset_m": 50,
   "circle_offset_action": "fail",
   "circle_merge_into_anchor_m": 150,
-  "max_junction_remap_m": 3000,
   "junction_fallback_when_no_circles": true,
-  "detect_old_carriageways": true,
-  "extra_old_route_links": [],
   "keep_links": [],
-  "junction_mapping": {},
-  "extra_connectors": [],
+  "endpoint_connect_existing_m": 300,
+  "junction_match_station_m": 1500,
   "new_node_no_start": "auto",
   "new_link_no_start": "auto"
 }
