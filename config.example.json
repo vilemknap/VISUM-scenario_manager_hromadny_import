@@ -10,11 +10,6 @@
   "route_type_value": "hlavni_krivka",
   "route_color_attribute": "BARVA",
   "route_identity_attribute": "ENTITYHAND",
-  "max_route_node_snap_m": 3000,
-  "max_endpoint_snap_m": 3000,
-  "max_station_backtrack_m": 50,
-  "main_path_max_backtrack_m": 250,
-  "minimum_route_node_spacing_m": 0.25,
   "geometry_verification_tolerance_m": 2,
   "set_link_length_from_geometry": true,
   "coordinate_m_to_length_unit": 0.001,
@@ -26,7 +21,8 @@
       "color": "Fialova",
       "identity": "14AF",
       "nodes": "variant_2_fialova_velke_kruhy_body_snap.geojson",
-      "allow_node_fallback": false
+      "node_number_base": 9911000,
+      "skip_if_no_nodes": false
     },
     {
       "code": "G_W2",
@@ -35,7 +31,8 @@
       "color": "Zelena",
       "identity": "1E11",
       "nodes": "variant_3_zelena_velke_kruhy_body_snap.geojson",
-      "allow_node_fallback": false
+      "node_number_base": 9921000,
+      "skip_if_no_nodes": false
     },
     {
       "code": "G_W3",
@@ -44,7 +41,8 @@
       "color": "Hneda",
       "identity": "26B3",
       "nodes": "variant_5_hneda_velke_kruhy_body_snap.geojson",
-      "allow_node_fallback": false
+      "node_number_base": 9931000,
+      "skip_if_no_nodes": false
     },
     {
       "code": "G_W4",
@@ -53,7 +51,8 @@
       "color": "Modra",
       "identity": "2E29",
       "nodes": "variant_4_modra_velke_kruhy_body_snap.geojson",
-      "allow_node_fallback": false
+      "node_number_base": 9941000,
+      "skip_if_no_nodes": false
     },
     {
       "code": "G_W5",
@@ -62,10 +61,24 @@
       "color": "Oranzova",
       "identity": "3156",
       "nodes": "variant_6_oranzova_velke_kruhy_body_snap.geojson",
-      "allow_node_fallback": true
+      "node_number_base": 9951000,
+      "skip_if_no_nodes": true
     }
   ],
-  "authoritative_point_merge_tolerance_m": 1,
-  "junction_cluster_radius_m": 2000,
-  "authoritative_node_match_radius_m": 1500
+  "copy_link_attributes": [
+    "TYPENO",
+    "TSYSSET",
+    "NUMLANES",
+    "CAPPRT",
+    "V0PRT",
+    "VDFPARASETNO",
+    "TOLLPRT",
+    "ADDVAL1",
+    "ADDVAL2",
+    "ADDVAL3",
+    "BARVA",
+    "LAYER",
+    "TYP",
+    "ENTITYHAND"
+  ]
 }
