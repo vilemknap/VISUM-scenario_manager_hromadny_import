@@ -15,6 +15,7 @@
   "max_route_node_snap_m": 3000.0,
   "max_endpoint_snap_m": 3000.0,
   "max_station_backtrack_m": 50.0,
+  "main_path_max_backtrack_m": 250.0,
   "minimum_route_node_spacing_m": 0.25,
   "geometry_verification_tolerance_m": 2.0,
 
