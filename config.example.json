@@ -1,65 +1,71 @@
 {
   "mode": "dry-run",
+
   "project_dir": "C:/R1_VARIANTY",
   "base_version": "R1_VARIANTYBase.ver",
+  "vpdb": "R1_VARIANTY.vpdb",
   "tra_dir": "C:/R1_VARIANTY/Modifications",
   "routes_dir": "routes",
-  "work_dir": "_geometry_update_work",
-  "backup_dir": "backup_geometry_modifications",
-  "route_type_attribute": "TYP",
-  "route_type_value": "hlavni_krivka",
-  "route_color_attribute": "BARVA",
-  "route_identity_attribute": "ENTITYHAND",
-  "max_route_node_snap_m": 3000,
-  "max_endpoint_snap_m": 3000,
-  "max_station_backtrack_m": 50,
-  "main_path_max_backtrack_m": 250,
-  "minimum_route_node_spacing_m": 0.25,
-  "geometry_verification_tolerance_m": 2,
-  "set_link_length_from_geometry": true,
-  "coordinate_m_to_length_unit": 0.001,
-  "modifications": [
+
+  "geometry_modifications": [
     {
       "code": "G_W1_oprava",
       "tra": "M000021.tra",
-      "route": "variant_2_fialova.geojson",
-      "color": "Fialova",
-      "identity": "14AF",
-      "nodes": "variant_2_fialova_velke_kruhy_body_snap.geojson"
+      "parts": [
+        {"identity": "14AF", "route": "variant_2_fialova.geojson", "nodes": "variant_2_fialova_velke_kruhy_body_snap.geojson"}
+      ]
     },
     {
       "code": "G_W2",
       "tra": "M000002.tra",
-      "route": "variant_3_zelena.geojson",
-      "color": "Zelena",
-      "identity": "1E11",
-      "nodes": "variant_3_zelena_velke_kruhy_body_snap.geojson"
+      "parts": [
+        {"identity": "1E11", "route": "variant_3_zelena.geojson", "nodes": "variant_3_zelena_velke_kruhy_body_snap.geojson"}
+      ]
     },
     {
       "code": "G_W3",
       "tra": "M000003.tra",
-      "route": "variant_5_hneda.geojson",
-      "color": "Hneda",
-      "identity": "26B3",
-      "nodes": "variant_5_hneda_velke_kruhy_body_snap.geojson"
+      "parts": [
+        {"identity": "26B3", "route": "variant_5_hneda.geojson", "nodes": "variant_5_hneda_velke_kruhy_body_snap.geojson"}
+      ]
     },
     {
       "code": "G_W4",
       "tra": "M000004.tra",
-      "route": "variant_4_modra.geojson",
-      "color": "Modra",
-      "identity": "2E29",
-      "nodes": "variant_4_modra_velke_kruhy_body_snap.geojson"
+      "parts": [
+        {"identity": "2E29", "route": "variant_4_modra.geojson", "nodes": "variant_4_modra_velke_kruhy_body_snap.geojson"}
+      ]
     },
     {
       "code": "G_W5",
       "tra": "M000005.tra",
-      "route": "variant_6_oranzova.geojson",
-      "color": "Oranzova",
-      "identity": "3156",
-      "nodes": "variant_6_oranzova_velke_kruhy_body_snap.geojson"
+      "parts": [
+        {"identity": "3156", "route": "variant_6_oranzova.geojson", "nodes": "variant_6_oranzova_velke_kruhy_body_snap.geojson"}
+      ]
+    },
+    {
+      "code": "G_W1+W2_oprava",
+      "enabled": false,
+      "tra": "M000025.tra",
+      "parts": [
+        {"identity": "14AF", "route": "variant_2_fialova.geojson", "nodes": "variant_2_fialova_velke_kruhy_body_snap.geojson"},
+        {"identity": "1E11", "route": "variant_3_zelena.geojson", "nodes": "variant_3_zelena_velke_kruhy_body_snap.geojson"}
+      ]
     }
   ],
-  "authoritative_point_merge_tolerance_m": 1,
-  "junction_cluster_radius_m": 2000
+
+  "trim_to_old_extent": true,
+  "endpoint_snap_to_old_anchor_m": 500,
+  "circle_max_offset_m": 50,
+  "circle_offset_action": "fail",
+  "circle_merge_into_anchor_m": 150,
+  "max_junction_remap_m": 3000,
+  "junction_fallback_when_no_circles": true,
+  "detect_old_carriageways": true,
+  "extra_old_route_links": [],
+  "keep_links": [],
+  "junction_mapping": {},
+  "extra_connectors": [],
+  "new_node_no_start": "auto",
+  "new_link_no_start": "auto"
 }

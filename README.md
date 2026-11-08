@@ -1,238 +1,99 @@
-# VISUM Scenario Manager – hromadná výměna geometrie variant R1
+# VISUM Scenario Manager – náhrada tras variant R1
 
-Tento repozitář obsahuje bezpečnostně orientovaný skript pro **PTV Visum 2026**, který hromadně vymění hlavní trasu v existujících geometry modifications Scenario Manageru bez ručního přepisování desítek scénářů.
+Skript pro **PTV Visum 2026**. V geometry modifications Scenario Manageru nahradí starou trasu novou:
+**starou trasu smaže a vloží nové uzly a nové linky** podle nových podkladů.
 
-Skript je připraven pro projekt `R1_VARIANTY` a pracuje s těmito modifikacemi:
-
-| Varianta | Geometry modification | TRA | Nová trasa | identita `ENTITYHAND` |
+| Varianta | Geometry modification | `.tra` | Nová osa | Velké kruhy (uzly) |
 |---|---|---|---|---|
-| fialová | `G_W1_oprava` | `M000021.tra` | `variant_2_fialova.geojson` | `14AF` |
-| zelená | `G_W2` | `M000002.tra` | `variant_3_zelena.geojson` | `1E11` |
-| hnědá | `G_W3` | `M000003.tra` | `variant_5_hneda.geojson` | `26B3` |
-| modrá | `G_W4` | `M000004.tra` | `variant_4_modra.geojson` | `2E29` |
-| oranžová | `G_W5` | `M000005.tra` | `variant_6_oranzova.geojson` | `3156` |
+| fialová | `G_W1_oprava` | `M000021.tra` | `variant_2_fialova.geojson` | `variant_2_fialova_velke_kruhy_body_snap.geojson` |
+| zelená | `G_W2` | `M000002.tra` | `variant_3_zelena.geojson` | `variant_3_zelena_velke_kruhy_body_snap.geojson` |
+| hnědá | `G_W3` | `M000003.tra` | `variant_5_hneda.geojson` | `variant_5_hneda_velke_kruhy_body_snap.geojson` |
+| modrá | `G_W4` | `M000004.tra` | `variant_4_modra.geojson` | `variant_4_modra_velke_kruhy_body_snap.geojson` |
+| oranžová | `G_W5` | `M000005.tra` | `variant_6_oranzova.geojson` | `variant_6_oranzova_velke_kruhy_body_snap.geojson` (prázdný) |
 
-## Co skript nedělá
+Všechny podklady jsou ve složce `routes/` (EPSG:25834).
 
-- **Neupravuje `R1_VARIANTY.vpdb`.**
-- Nemění čísla uzlů ani klíče linků.
-- Nemění šířkové modifikace `W*_S1/S2/S3`.
-- Zatím neupravuje kombinovanou geometry modification `G_W1+W2_oprava` (`M000025.tra`), protože její původní `.tra` nebyla součástí ověřených vstupů.
+## Co skript udělá
 
-Díky zachování `NodeNo`/link keys zůstávají vazby existujících scénářů a navazujících šířkových modifikací zachované.
+Pro každou variantu:
 
-## Princip
+1. Načte `R1_VARIANTYBase.ver` a aplikuje původní geometry `.tra`.
+2. **Smaže celý starý komplex trasy**: hlavní linky (`TYP=hlavni_krivka` + `ENTITYHAND` varianty), jízdní pásy, rampy, větve MÚK a všechny uzly, které stará modifikace vložila.
+3. **Na každém velkém kruhu vloží nový uzel** (obyčejná úrovňová křižovatka, nové číslo uzlu).
+4. **Mezi uzly vloží nové linky** s polygonem podle nové osy (nová čísla linků). Typ, kapacitu, rychlost a ostatní atributy převezme ze starého linku trasy ve stejném staničení.
+5. **Napojí stávající síť**: každý stávající uzel, na který se stará trasa napojovala, propojí jedním linkem s nejbližším novým uzlem (velkým kruhem) ve staničení. Číslo a atributy linku převezme z původního napojení. **Žádné rampy ani MÚK se nevytváří.**
+6. Visum z toho vygeneruje novou geometry `.tra` vůči base verzi.
+7. **Přegeneruje i šířkové modifikace S1/S2/S3**, které na geometrii závisí (zjistí je z `R1_VARIANTY.vpdb`):
+   - řádky pro staré linky trasy se přenesou na nové linky ve stejném staničení,
+   - řádky pro napojení se převedou na nové napojení,
+   - řádky pro smazané rampy a MÚK se vypustí,
+   - řádky pro stávající síť zůstanou beze změny.
+8. Všechno ověří: base + nová geometrie + každá nová šířková modifikace se musí ve Visumu načíst bez chyby.
+9. V režimu `apply` udělá zálohu a přepíše `.tra` soubory. **`R1_VARIANTY.vpdb` se nikdy nezapisuje**, takže všech 69 scénářů zůstane navázaných.
 
-Geometry modification je pouze **delta vůči base version**. Některé části hlavní trasy proto v konkrétní `.tra` nejsou, protože jsou zděděné z `R1_VARIANTYBase.ver`.
+### Rozsah náhrady
+Nové osy jsou celé trasy (35–46 km). Stará modifikace měla novou trasu jen mezi stávajícími napojovacími uzly
+(např. 9200065 ~ 0,5 km od začátku osy, u fialové 1002957 → 1002655). Skript proto použije novou osu jen v tomto úseku
+(`trim_to_old_extent`). Zbytek je ve scénářích dál tvořen stávající sítí. Velké kruhy mimo úsek se vynechají a skript je vypíše.
 
-Skript proto pro každou variantu:
+### Velké kruhy
+- Kruh do 150 m od stávajícího koncového uzlu (např. 1002957) se sloučí s tímto uzlem.
+- Stávající uzel, který byl napojen na starou trasu, ale do 1500 m staničení nemá žádný velký kruh, se **nepřipojí**. Skript ho vypíše v upozorněních a v `napojeni_stavajici_site.csv`.
+- Oranžová varianta nemá v DXF žádné velké kruhy. Skript proto pro ni vytvoří uzly v průmětu starých míst napojení. Vypnete to pomocí `"junction_fallback_when_no_circles": false`.
 
-1. načte `R1_VARIANTYBase.ver`,
-2. aplikuje původní geometry `.tra`,
-3. v kompletní síti vyhledá celou hlavní trasu podle `TYP=hlavni_krivka` a unikátního `ENTITYHAND`,
-4. seřadí její uzly a linky jako jednu souvislou trasu,
-5. promítne existující trasové uzly na novou GeoJSON křivku,
-6. zachová `NodeNo` a link keys, ale změní jejich polohu/průběh,
-7. načte nový `LINKPOLY` přes standardní Visum `.net` rozhraní,
-8. zkontroluje výsledný `WKTPoly`,
-9. nechá Visum metodou `GenerateModelTransferFile()` vytvořit novou kanonickou `.tra` proti stejné base verzi,
-10. v režimu `apply` zazálohuje a nahradí původní `.tra`.
+## Spuštění
 
-Pokud některá kontrola selže, skript skončí před nahrazením originálů.
+### 1. Stažení
+**Code → Download ZIP**, rozbalit např. do `C:\VISUM-scenario_manager_hromadny_import`.
 
-## Vstupy
-
-Lokálně na počítači s PTV Visum 2026 potřebujete:
-
-- `R1_VARIANTYBase.ver`
-- `R1_VARIANTY.vpdb` – skript ho nemění
-- `M000002.tra`
-- `M000003.tra`
-- `M000004.tra`
-- `M000005.tra`
-- `M000021.tra`
-- nové **celé hlavní trasy** v GeoJSON, **EPSG:25834**:
-  - `variant_2_fialova.geojson`
-  - `variant_3_zelena.geojson`
-  - `variant_4_modra.geojson`
-  - `variant_5_hneda.geojson`
-  - `variant_6_oranzova.geojson`
-
-> Nepoužívejte rozdělené `*_useky_*` ani bodové SHP. Skript potřebuje celou novou osu varianty.
-
-## Doporučená struktura
-
-```text
-C:\VISUM-scenario_manager_hromadny_import\
-  visum_bulk_replace_geometry.py
-  config.example.json
-  config.json
-  routes\
-    variant_2_fialova.geojson
-    variant_3_zelena.geojson
-    variant_4_modra.geojson
-    variant_5_hneda.geojson
-    variant_6_oranzova.geojson
-```
-
-## Postup spuštění
-
-### 1. Stáhněte repozitář
-
-Přes **Code → Download ZIP**, nebo:
-
-```bat
-git clone https://github.com/vilemknap/VISUM-scenario_manager_hromadny_import.git
-```
-
-### 2. Připravte `config.json`
-
-Zkopírujte:
-
-```text
-config.example.json -> config.json
-```
-
-Nastavte minimálně:
+### 2. `config.json`
+Zkopírujte `config.example.json` → `config.json` a zkontrolujte cesty (**lomítka `/`**):
 
 ```json
-"project_dir": "C:/CESTA/K/R1_VARIANTY"
+"project_dir": "C:/R1_VARIANTY",
+"tra_dir": "C:/R1_VARIANTY/Modifications",
 ```
 
-Pokud jsou `M000*.tra` jinde, nastavte `tra_dir`. `routes_dir` je standardně `routes` vedle skriptu.
+V `project_dir` musí být `R1_VARIANTYBase.ver` a `R1_VARIANTY.vpdb`. V `tra_dir` musí být všechny `M0000xx.tra`, tedy geometrické i šířkové (2–5, 9–24).
 
-Pro první běh musí zůstat:
+### 3. DRY-RUN (nic nepřepisuje)
+1. Uložte rozpracovanou síť a zavřete Scenario Manager projekt.
+2. PTV Visum 2026 → **Scripts → Run script file...** → `visum_bulk_replace_geometry.py`.
+3. Výstup bude v `C:/R1_VARIANTY/_route_replace_work/<čas>_dry_run/`:
+   - `report/summary.json`: `"status": "PASS"` a seznam upozornění,
+   - `report/napojeni_stavajici_site.csv`: který stávající uzel se napojil na který nový uzel,
+   - `report/nove_linky.csv`: nové linky, délky, staničení a starý link, ze kterého převzaly atributy,
+   - `report/sirkove_modifikace_radky.csv`: co se stalo s každým řádkem S1/S2/S3,
+   - `<kód>/nahled_nova_trasa.geojson`: náhled nových uzlů a linků a smazané staré trasy (otevřete v QGIS),
+   - `<kód>/canonical/*.tra`: nové `.tra` soubory.
 
-```json
-"mode": "dry-run"
-```
+### 4. APPLY
+Pokud je dry-run v pořádku, nastavte `"mode": "apply"` a spusťte skript znovu.
+Původní `.tra` se uloží do `C:/R1_VARIANTY/backup_modifications/<čas>/` a nahradí se novými.
+Vrácení: zkopírujte soubory ze zálohy zpět.
 
-### 3. Vložte nové trasy
+### 5. Kontrola
+Otevřete `R1_VARIANTY.vpdb`, načtěte např. scénář `W2_S1_2040` a zkontrolujte trasu a napojení. Potom scénáře přepočítejte.
 
-Do `routes` vložte pět GeoJSONů v **EPSG:25834** s názvy uvedenými výše.
+## Volby v `config.json`
 
-### 4. Spusťte povinný DRY-RUN v PTV Visum 2026
+| klíč | význam | výchozí |
+|---|---|---|
+| `trim_to_old_extent` | novou osu použít jen v úseku staré modifikace | `true` |
+| `endpoint_snap_to_old_anchor_m` | max. vzdálenost stávajícího koncového uzlu od osy | 500 |
+| `circle_merge_into_anchor_m` | kruh tak blízko koncového uzlu = tentýž uzel | 150 |
+| `circle_max_offset_m` | max. vzdálenost kruhu od osy (jinak chyba) | 50 |
+| `junction_match_station_m` | max. rozdíl staničení mezi starým napojením a velkým kruhem | 1500 |
+| `junction_fallback_when_no_circles` | varianta bez kruhů → uzly v průmětu starých napojení | `true` |
+| `keep_links` | čísla linků ze staré modifikace, které se nemají mazat | `[]` |
+| `extra_connectors` | ruční napojení: `{"node": 1003317, "template_link": 9800848}` (volitelně `"to": <nový uzel>`) | `[]` |
+| `new_node_no_start`, `new_link_no_start` | první nové číslo uzlu/linku (`auto` = nad maximem v base i všech `.tra`) | `auto` |
 
-1. Uložte případnou rozpracovanou síť.
-2. Otevřete **PTV Visum 2026**.
-3. Zvolte **Scripts → Run script file...**.
-4. Vyberte `visum_bulk_replace_geometry.py`.
-5. Skript automaticky načte `config.json` ze stejné složky.
-
-Dry-run **nemění původní `.tra` ani `.vpdb`**.
-
-Výstupy vzniknou v:
-
-```text
-_geometry_update_work\YYYYMMDD_HHMMSS_dry_run\
-  canonical_tra\
-  linkpoly_patch\
-  report\
-```
-
-### 5. Co zkontrolovat
-
-V `report\summary.json` musí být:
-
-```json
-"status": "PASS"
-```
-
-V `route_node_moves.csv` zkontrolujte zejména `snap_m`. Výchozí pojistka je:
-
-```json
-"max_route_node_snap_m": 3000.0
-```
-
-V `link_geometry_validation.csv` musí mít všechny řádky:
-
-```text
-ok = True
-```
-
-### 6. Ostré použití
-
-Až dry-run projde, změňte:
-
-```json
-"mode": "apply"
-```
-
-a spusťte skript z Visumu znovu.
-
-Skript před přepisem vytvoří zálohu:
-
-```text
-backup_geometry_modifications\YYYYMMDD_HHMMSS\
-```
-
-a nahradí pouze:
-
-```text
-M000002.tra
-M000003.tra
-M000004.tra
-M000005.tra
-M000021.tra
-```
-
-`R1_VARIANTY.vpdb` se nikdy nezapisuje.
-
-## Kontrola v Scenario Manageru po APPLY
-
-1. Znovu otevřete `R1_VARIANTY.vpdb`.
-2. Otevřete alespoň jeden scénář W1–W5.
-3. Zkontrolujte novou hlavní trasu.
-4. Zkontrolujte hlavně MÚK a navazující rampy.
-5. Ověřte, že šířkové modifikace `S1/S2/S3` zůstaly na stejných linkách.
-6. Scénáře znovu přepočítejte.
-
-## Poznámka k rampám
-
-Skript zachovává ID a přemisťuje uzly hlavní trasy na novou osu. Tím zůstávají ostatní linky připojené ke stejným uzlům. **Vnitřní polygon navazujících ramp ale skript automaticky nedeformuje.**
-
-Pokud se MÚK posunula výrazně, může být potřeba druhá automatizovaná etapa pro geometrickou deformaci ramp. Proto je první dry-run a vizuální kontrola povinná.
+Per-variantu lze `keep_links` a `extra_connectors` zapsat i přímo do položky v `geometry_modifications`.
 
 ## Kombinovaná W1+W2
+`G_W1+W2_oprava` (`M000025.tra`) je v configu připravená, ale vypnutá (`"enabled": false`).
+Zapněte ji, až projde dry-run ostatních variant.
 
-`G_W1+W2_oprava` (modification 25) zatím není zahrnuta, protože původní `M000025.tra` nebyla ověřena spolu s ostatními vstupy.
-
-## Bezpečnostní pojistky
-
-- `.vpdb` se nemění,
-- `dry-run` nemění původní `.tra`,
-- trasa se identifikuje pomocí `TYP=hlavni_krivka` + unikátního `ENTITYHAND`,
-- trasa musí být jedna neodbočující cesta,
-- hlídá se maximální posun uzlů,
-- hlídá se pořadí uzlů podél nové osy,
-- po importu se kontroluje `WKTPoly`,
-- před přepisem se zálohují všechny cílové `.tra`.
-
-## Použité Visum 2026 COM funkce
-
-Skript používá zejména:
-
-- `Visum.IO.LoadVersion(...)`
-- `Visum.ApplyModelTransferFile(...)`
-- `Visum.IO.LoadNet(..., ReadAdditive=True)`
-- `Visum.GenerateModelTransferFile(...)`
-- `Visum.Net.Nodes.ItemByKey(...)`
-- `Visum.Net.Links.ItemByKey(...)`
-- `GetMultipleAttributes(...)`
-
-Nejsou potřeba externí Python balíčky typu geopandas/shapely.
-
-
-## Důležitá změna: nová topologie, ne ohýbání staré trasy
-
-Aktuální verze skriptu nepředpokládá jednu nerozvětvenou starou trasu.
-
-Pro každou variantu používá:
-- celou novou osu `variant_N_*.geojson`,
-- autoritativní uzlové body z velkých kruhů `variant_N_*_velke_kruhy_body_snap.geojson`.
-
-Z těchto vstupů vytvoří nové úseky. Staré `NodeNo` a `LinkNo` používá pouze jako stabilní identifikátory kvůli Scenario Manageru a S1/S2/S3. Uzly dostanou nové souřadnice, hlavní linky nový `LINKPOLY` a navazující rampové linky se geometricky deformují podle posunu uzlů.
-
-Pokud je v MÚK více starých uzlů v jednom místě, mohou být zachována jejich různá ID, ale jsou přesunuta ke stejnému novému uzlovému bodu. To zachová vazby ramp a šířkových modifikací.
-
-Pro oranžovou variantu v dodaném DXF nebyly nalezeny žádné velké `CIRCLE` body. Skript proto pro W5 použije jasně označený fallback: staré uzlové členění promítne na novou oranžovou osu.
+## Když něco selže
+Skript skončí dřív, než cokoliv přepíše, a chybu uloží do `LAST_ERROR.txt` vedle skriptu.
