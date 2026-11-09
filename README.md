@@ -45,6 +45,10 @@ Pro každou variantu:
 - **Modrá** měla v původních W4_S1 a W4_S2 úvodní úsek (9200065 → ~19 km) zavřený v obou směrech. Při náhradě se otevře
   (`"open_closed_route_links": true`): S1 typ 2 / 22 500 / 120 km/h, S2 typ 4 / 10 000 / 90 km/h, stejně jako zbytek modré.
 
+- **Zelená W2_S2** měla úvodní úsek od MÚK Most po 8,4 km zavřený, také se otevře (typ 4 / 10 000 / 90 km/h).
+- **Oranžová W5_S2** měla u úvodních linků v jednom směru prázdný typ, doplní se typ 4.
+- **Fialová W1_S1/S2** přestanou zavírat silnici 1002477 – 9900345 – 1002655 (linky 9800699, 9800700).
+
 ### Velké kruhy a napojení
 - Na každém velkém kruhu vznikne nový uzel.
 - Kruh do 150 m od stávajícího uzlu, kterým trasa prochází (např. 1002957), se sloučí s tímto uzlem.
@@ -111,6 +115,8 @@ Otevřete `R1_VARIANTY.vpdb`, načtěte např. scénář `W2_S1_2040` a zkontrol
 | `trim_to_old_extent` (i per varianta) | `true` = novou osu použít jen v úseku staré modifikace | `false` |
 | `existing_node_on_axis_m` | stávající uzel takto blízko osy = průjezdný uzel trasy | 20 |
 | `open_closed_route_links` (per varianta) | zavřené úseky hlavní trasy v S1/S2/S3 otevřít nastavením zbytku trasy v téže modifikaci | modrá `true` |
+| `fill_empty_route_type` (per varianta) | doplnit chybějící typ trasy v S1/S2/S3 typem zbytku trasy | oranžová `true` |
+| `drop_width_rows_for_links` (per varianta) | čísla linků, jejichž řádky se z S1/S2/S3 vypustí | fialová `[9800699, 9800700]` |
 | `replace_old_route_on_existing_network` (per varianta) | vypustit z S1/S2/S3 upgrade stávajících silnic staré trasy | fialová `true` |
 | `endpoint_connect_existing_m` | slepý konec nové osy napojit na stávající uzel do této vzdálenosti | 300 |
 | `extra_connectors` | ruční napojení: `{"node": 1003317, "to": "konec", "template_tra": "M000005.tra", "template_link": 9800868}`; `to` = číslo uzlu / `"konec"` / `"zacatek"` / vynechat (nejbližší nový uzel) | hnědá: 1003317, 1003323 |

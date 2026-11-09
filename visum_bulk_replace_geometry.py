@@ -648,6 +648,8 @@ def build_plan(model, mod_cfg, cfg, width_tras, inputs, alloc, all_node_xy, net_
     plan.trim = trim
     plan.replace_existing_route = bool(mod_cfg.get("replace_old_route_on_existing_network", False))
     plan.open_closed_route_links = bool(mod_cfg.get("open_closed_route_links", False))
+    plan.fill_empty_route_type = bool(mod_cfg.get("fill_empty_route_type", False))
+    plan.drop_width_rows_for_links = set(int(x) for x in mod_cfg.get("drop_width_rows_for_links", []))
     for part in inputs:
         ident = part["identity"]
         chains = chain_lines(part["lines"], float(cfg["line_join_tolerance_m"]))
@@ -1299,6 +1301,21 @@ def map_width_tables(wtra, plan, model):
                                        if to_int(lk.get(r, "NO")) in plan.old_main and lk.get(r, "TSYSSET") != "")
             if prof:
                 open_profile = dict(zip(cols, prof.most_common(1)[0][0]))
+    type_profile = None
+    if getattr(plan, "fill_empty_route_type", False):
+        lk = wtra.table("*LINK")
+        if lk is not None and "TYPENO" in lk.idx:
+            tp = collections.Counter(lk.get(r, "TYPENO") for r in lk.rows
+                                     if to_int(lk.get(r, "NO")) in plan.old_main and lk.get(r, "TYPENO") != "")
+            if tp:
+                type_profile = tp.most_common(1)[0][0]
+    drop_nos = getattr(plan, "drop_width_rows_for_links", set())
+    opened_keys = set()
+    if open_profile:
+        lk = wtra.table("*LINK")
+        for r in lk.rows:
+            if to_int(lk.get(r, "NO")) in plan.old_main and lk.get(r, "TSYSSET") == "":
+                opened_keys.add((to_int(lk.get(r, "FROMNODENO")), to_int(lk.get(r, "TONODENO"))))
 
     for t in wtra.tables:
         if t.name == "VERSION":
@@ -1308,8 +1325,17 @@ def map_width_tables(wtra, plan, model):
         for r in t.rows:
             if is_linkish:
                 key = (to_int(t.get(r, "FROMNODENO")), to_int(t.get(r, "TONODENO")))
+                if key in main_dirs and t.tag() == "-LANE" and key in opened_keys:
+                    stats["zachovany pruhy otevreneho useku (%s)" % t.tag()] += 1
+                    log.append((t.tag(), "%d-%d" % key, "usek se otevira - pruhy se nemazou"))
+                    continue
                 if key in main_dirs:
                     targets = plan.old_dir_to_new.get(key, [])
+                    if type_profile and t.tag() == "*LINK" and t.get(r, "TYPENO") == "" and t.get(r, "TSYSSET") != "":
+                        r = list(r)
+                        r[t.idx["TYPENO"]] = type_profile
+                        stats["doplnen chybejici typ trasy (%s)" % t.tag()] += len(targets)
+                        log.append((t.tag(), "%d-%d" % key, "doplnen TYPENO %s" % type_profile))
                     if open_profile and t.tag() == "*LINK" and t.get(r, "TSYSSET") == "":
                         r = list(r)
                         for c, v in open_profile.items():
@@ -1330,6 +1356,12 @@ def map_width_tables(wtra, plan, model):
                 if key in carriage_dirs:
                     stats["vypusteno smazany stary link MUK/rampy (%s)" % t.tag()] += 1
                     log.append((t.tag(), "%d-%d" % key, "stary link MUK/rampy/pasu smazan - radek vypusten"))
+                    continue
+                rno = to_int(t.get(r, "NO")) if "NO" in t.idx and t.get(r, "NO") != "" else None
+                lnos = set(no for no, dirs in model.links.items() if key in dirs) if drop_nos else set()
+                if drop_nos and ((rno in drop_nos) or (lnos & drop_nos)):
+                    stats["vypusteno dle drop_width_rows_for_links (%s)" % t.tag()] += 1
+                    log.append((t.tag(), "%d-%d" % key, "vypusteno dle configu - vraceno do stavu geometrie"))
                     continue
                 if key in old_on_existing:
                     stats["vypusteno stara trasa po stavajici siti (%s)" % t.tag()] += 1

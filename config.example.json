@@ -13,6 +13,7 @@
       "code": "G_W1_oprava",
       "tra": "M000021.tra",
       "replace_old_route_on_existing_network": true,
+      "drop_width_rows_for_links": [9800699, 9800700],
       "parts": [
         {"identity": "14AF", "route": "variant_2_fialova.geojson", "nodes": "variant_2_fialova_velke_kruhy_body_snap.geojson"}
       ]
@@ -20,6 +21,7 @@
     {
       "code": "G_W2",
       "tra": "M000002.tra",
+      "open_closed_route_links": true,
       "parts": [
         {"identity": "1E11", "route": "variant_3_zelena.geojson", "nodes": "variant_3_zelena_velke_kruhy_body_snap.geojson"}
       ]
@@ -46,6 +48,7 @@
     {
       "code": "G_W5",
       "tra": "M000005.tra",
+      "fill_empty_route_type": true,
       "parts": [
         {"identity": "3156", "route": "variant_6_oranzova.geojson", "nodes": "variant_6_oranzova_velke_kruhy_body_snap.geojson"}
       ]
