@@ -130,3 +130,30 @@ Zapněte ji, až projde dry-run ostatních variant.
 
 ## Když něco selže
 Skript skončí dřív, než cokoliv přepíše, a chybu uloží do `LAST_ERROR.txt` vedle skriptu.
+
+## Aktualizace jednotlivých variant (`visum_aktualizace_variant.py`)
+
+Samostatný skript pro situaci, kdy už je náhrada tras jednou provedená (`apply`) a pro některou variantu přijdou
+nové podklady. Vezme **původní** `.tra` dané varianty (geometrie + její S1/S2/S3) ze zálohy
+`backup_modifications`, nahradí trasu novými podklady stejným postupem a přepíše **jen soubory této varianty**.
+Ostatní varianty ani `R1_VARIANTY.vpdb` nemění. Předtím zazálohuje aktuální stav.
+
+Připravená aktualizace podle DXF z 9. 11. 2026:
+- **fialová** (`G_W1_oprava`): nová osa `variant_2_fialova_aktualni.geojson` (změna mezi ~11,7 a 16,2 km, posun až 420 m)
+  a 4 velké kruhy místo 6 (`variant_2_fialova_aktualni_velke_kruhy_body_snap.geojson`). Uzel 1002655 je teď 700 m od osy
+  a bez kruhu, vznikne pro něj nový uzel v průmětu (~13,1 km),
+- **oranžová** (`G_W5`): nový velký kruh r = 500 m ve staničení ~35,2 km
+  (`variant_6_oranzova_aktualni_velke_kruhy_body_snap.geojson`, převedený z S-JTSK, odchylka < 5 m).
+
+Spuštění:
+1. Vedle skriptu musí být `visum_bulk_replace_geometry.py` a váš `config.json` (cesty a volby variant).
+2. Zkopírujte `config_aktualizace.example.json` → `config_aktualizace.json`. Variantu, kterou aktualizovat
+   nechcete, vypnete `"enabled": false`.
+3. Visum → Scripts → Run script file… → `visum_aktualizace_variant.py` s `"mode": "dry-run"`.
+   Výsledek: `LAST_STATUS_aktualizace.txt`, průběh `LAST_RUN_aktualizace.log`.
+4. Pak `"mode": "apply"` a znovu. Přepíšou se jen soubory aktualizovaných variant (fialová `M000021`–`M000024`,
+   oranžová `M000005`, `M000018`–`M000020`).
+5. Ve Scenario Manageru přepočítejte scénáře těchto variant.
+
+Původní soubory skript najde sám (`"source_tra_dir": "auto"`): první zálohu, ve které jsou soubory ještě
+v původní podobě. Případně zadejte složku ručně.

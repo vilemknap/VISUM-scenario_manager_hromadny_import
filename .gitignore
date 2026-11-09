@@ -1,9 +1,13 @@
 *.pyc
 LAST_ERROR.txt
+LAST_ERROR_aktualizace.txt
 LAST_RUN.log
+LAST_RUN_aktualizace.log
 LAST_STATUS.txt
+LAST_STATUS_aktualizace.txt
 __pycache__/
 _geometry_update_work/
 backup_geometry_modifications/
 config.json
+config_aktualizace.json
 routes/*.geojson

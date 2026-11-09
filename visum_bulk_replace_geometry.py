@@ -1614,12 +1614,16 @@ def run(cfg, visum=None, log=None):
     log("R1 VARIANTY - nahrada tras (rezim %s)" % mode)
     log("base: %s" % base_ver)
     log("tra:  %s" % tra_dir)
+    if cfg.get("source_tra_dir"):
+        log("zdroj puvodnich .tra: %s" % resolve(cfg["source_tra_dir"], project))
     log("work: %s" % work)
 
     # --- priprava vstupu a seznamu modifikaci ---------------------------------
     jobs = []
     for m in cfg["geometry_modifications"]:
-        tra_path = resolve(m["tra"], tra_dir)
+        src_dir = resolve(cfg["source_tra_dir"], project) if cfg.get("source_tra_dir") else tra_dir
+        tra_path = resolve(m["tra"], src_dir)
+        tra_dst = resolve(m["tra"], tra_dir)
         if not tra_path.exists():
             raise Fail("Nenalezena geometry modifikace %s: %s" % (m["code"], tra_path))
         gno = m.get("no") or mod_no_from_tra(tra_path.name)
@@ -1629,7 +1633,7 @@ def run(cfg, visum=None, log=None):
             if widths is None:
                 raise Fail("Nelze zjistit sirkove modifikace pro %s: chybi %s a v configu neni "
                            "width_modifications." % (m["code"], vpdb))
-        widths = [dict(w, path=resolve(w["tra"], tra_dir)) for w in widths]
+        widths = [dict(w, path=resolve(w["tra"], src_dir), dst=resolve(w["tra"], tra_dir)) for w in widths]
         for w in widths:
             if not w["path"].exists():
                 raise Fail("Nenalezena sirkova modifikace %s (%s) zavisla na %s" % (w.get("code"), w["path"], m["code"]))
@@ -1641,7 +1645,7 @@ def run(cfg, visum=None, log=None):
                     raise Fail("Nenalezen vstupni soubor %s" % f)
             parts.append({"identity": p["identity"], "lines": load_lines(rp), "points": load_points(np_),
                           "route_file": str(rp), "nodes_file": str(np_)})
-        jobs.append({"cfg": m, "tra": tra_path, "widths": widths, "parts": parts, "no": gno})
+        jobs.append({"cfg": m, "tra": tra_path, "dst": tra_dst, "widths": widths, "parts": parts, "no": gno})
         log("%s (M%06d): %s | sirkove: %s" % (m["code"], gno or 0, ", ".join(
             "%s:%d bodu" % (p["identity"], len(p["points"])) for p in parts),
             ", ".join("%s" % w.get("code", w["tra"]) for w in widths) or "zadne"))
@@ -1705,7 +1709,7 @@ def run(cfg, visum=None, log=None):
         verify_network(visum, plan, "%s (base + nova geometry .tra)" % code)
         g_canon = gdir / "geom_canonical.ver"
         v_save(visum, g_canon)
-        outputs.append((new_geom_tra, job["tra"]))
+        outputs.append((new_geom_tra, job["dst"]))
         log("nova geometry .tra: %s" % new_geom_tra)
 
         wres = []
@@ -1724,7 +1728,7 @@ def run(cfg, visum=None, log=None):
             v_load(visum, base_ver)
             v_apply(visum, new_geom_tra)
             v_apply(visum, new_w_tra)
-            outputs.append((new_w_tra, w["path"]))
+            outputs.append((new_w_tra, w["dst"]))
             for k, (tag, key, what) in enumerate(wlog):
                 all_width_log.append({"geometry": code, "width": w.get("code"), "file": w["path"].name,
                                       "table": tag, "key": key, "action": what})
