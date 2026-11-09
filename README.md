@@ -157,3 +157,34 @@ Spuštění:
 
 Původní soubory skript najde sám (`"source_tra_dir": "auto"`): první zálohu, ve které jsou soubory ještě
 v původní podobě. Případně zadejte složku ručně.
+
+## Přenos změn base verze do jiného projektu (`visum_prenos_base.py`)
+
+Když se v jiné kopii projektu (zdroj) upravila **base verze** (např. obchvaty) a chcete ji
+dostat do projektu s aktuálními variantami (cíl), aniž by se rozbily modifikace.
+
+Skript:
+1. načte starou base (cíl) a novou base (zdroj), najde nové / smazané / rozdělené uzly a linky,
+2. každou modifikaci cíle (geometrické i šířkové S1/S2/S3) „přeloží“ na novou base:
+   - koliduje-li číslo vkládaného uzlu/linky s číslem nově přidaným v base → přečísluje,
+   - mazání linky, která byla v nové base rozdělena (nový uzel na ní) → maže všechny její části,
+   - uzly v `keep_nodes` se nemažou (smaže se jen jejich původní linky, napojení zůstane),
+   - řádky na objekty, které v nové base už neexistují (odbočení, pruhy…), vypustí,
+3. každou modifikaci ověří (aplikace na novou base ve Visumu + kontrola sítě),
+4. v režimu `apply` zazálohuje cílovou base a Modifications do `backup_pred_prenosem_base/<čas>/`,
+   nahradí base verzi cíle base verzí zdroje a modifikace přeloženými soubory.
+   `R1_VARIANTY.vpdb` se nemění.
+
+Postup:
+1. `visum_prenos_base.py` dejte vedle `visum_bulk_replace_geometry.py`.
+2. `config_prenos_base.example.json` → `config_prenos_base.json`, zkontrolujte `source_project_dir`,
+   `target_project_dir`, `keep_nodes`.
+3. Zavřete projekt ve Visumu (Scenario Manager), pozastavte synchronizaci OneDrive.
+4. `"mode": "dry-run"` → Visum → Scripts → Run script file → `visum_prenos_base.py`.
+   Výsledek v `LAST_STATUS_prenos_base.txt` (PASS/FAIL), podrobnosti v `LAST_RUN_prenos_base.log`
+   (řádky `POZOR` stojí za přečtení).
+5. `"mode": "apply"` → spustit znovu.
+6. Otevřít projekt, ve Scenario Manageru přepočítat (znovu sestavit) všechny scénáře.
+
+Volitelné klíče: `only_geometry_modifications` (seznam kódů), `target_tra_dir`, `target_vpdb`,
+`work_dir`, `backup_dir`, `node_map_tolerance_m` (uzel zdroje do této vzdálenosti = stejný uzel).

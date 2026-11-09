@@ -10,3 +10,9 @@ _geometry_update_work/
 backup_geometry_modifications/
 config.json
 config_aktualizace.json
+LAST_RUN_prenos_base.log
+LAST_STATUS_prenos_base.txt
+LAST_ERROR_prenos_base.txt
+config_prenos_base.json
+_base_transfer_work/
+backup_pred_prenosem_base/
