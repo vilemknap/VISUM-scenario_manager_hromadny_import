@@ -1,0 +1,137 @@
+{
+  "type": "FeatureCollection",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "EPSG:25834"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 2,
+        "barva": "Fialová",
+        "source_layer": "2_Fialová_popisky_krizovatky",
+        "source_handle": "41",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 828.805,
+        "posun_na_krivku_m": 5.688,
+        "output_crs": "EPSG:25834",
+        "poradi_po_trase": 1
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          220295.5932440212,
+          5344560.351465251
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 2,
+        "barva": "Fialová",
+        "source_layer": "2_Fialová_popisky_krizovatky",
+        "source_handle": "44",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 1923.998,
+        "posun_na_krivku_m": 4.495,
+        "output_crs": "EPSG:25834",
+        "poradi_po_trase": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          221321.82142836985,
+          5344941.450843218
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 2,
+        "barva": "Fialová",
+        "source_layer": "2_Fialová_popisky_krizovatky",
+        "source_handle": "45",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 3574.053,
+        "posun_na_krivku_m": 11.685,
+        "output_crs": "EPSG:25834",
+        "poradi_po_trase": 3
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          222853.29372502866,
+          5345553.755042826
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 2,
+        "barva": "Fialová",
+        "source_layer": "2_Fialová_popisky_krizovatky",
+        "source_handle": "46",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 5592.102,
+        "posun_na_krivku_m": 47.673,
+        "output_crs": "EPSG:25834",
+        "poradi_po_trase": 4
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          224713.77027125357,
+          5346258.234209989
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 2,
+        "barva": "Fialová",
+        "source_layer": "2_Fialová_popisky_krizovatky",
+        "source_handle": "47",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 9072.707,
+        "posun_na_krivku_m": 22.602,
+        "output_crs": "EPSG:25834",
+        "poradi_po_trase": 5
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          227853.06457111592,
+          5345359.562590707
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 2,
+        "barva": "Fialová",
+        "source_layer": "2_Fialová_popisky_krizovatky",
+        "source_handle": "48",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 13268.654,
+        "posun_na_krivku_m": 0.854,
+        "output_crs": "EPSG:25834",
+        "poradi_po_trase": 6
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          231901.43033630544,
+          5345343.856256921
+        ]
+      }
+    }
+  ]
+}

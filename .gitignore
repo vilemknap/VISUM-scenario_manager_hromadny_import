@@ -10,4 +10,3 @@ _geometry_update_work/
 backup_geometry_modifications/
 config.json
 config_aktualizace.json
-routes/*.geojson

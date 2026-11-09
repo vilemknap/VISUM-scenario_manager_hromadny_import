@@ -1,0 +1,35 @@
+{
+ "type": "FeatureCollection",
+ "crs": {
+  "type": "name",
+  "properties": {
+   "name": "EPSG:25834"
+  }
+ },
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     253342.981,
+     5343584.215
+    ]
+   },
+   "properties": {
+    "variant": 6,
+    "barva": "Oranžová",
+    "poradi_po_trase": 1,
+    "source_layer": "6_Oranžová_popisky_krizovatky",
+    "source_handle": "76BA",
+    "radius_cad_m": 500.0,
+    "stacionaz_m": 35174.48,
+    "posun_na_krivku_m": 19.77,
+    "source_crs": "EPSG:5514",
+    "output_crs": "EPSG:25834",
+    "source_dxf": "05_11_2026_prehladna_situacia_25000_export.dxf (aktualizace 9.11.2026)",
+    "prevod": "lokalni transformace z koncu os vsech variant (rezidua < 1 m)"
+   }
+  }
+ ]
+}

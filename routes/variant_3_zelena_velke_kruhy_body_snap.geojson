@@ -1,0 +1,95 @@
+{
+  "type": "FeatureCollection",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "EPSG:25834"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 3,
+        "barva": "Zelená",
+        "source_layer": "3_Zelená_popisky_krizovatky",
+        "source_handle": "102",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 18293.155,
+        "posun_na_krivku_m": 0.365,
+        "output_crs": "EPSG:25834",
+        "poradi_po_trase": 1
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          235419.28021820605,
+          5345521.380953522
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 3,
+        "barva": "Zelená",
+        "source_layer": "3_Zelená_popisky_krizovatky",
+        "source_handle": "103",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 19629.654,
+        "posun_na_krivku_m": 48.468,
+        "output_crs": "EPSG:25834",
+        "poradi_po_trase": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          236447.2008037465,
+          5346375.462990446
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 3,
+        "barva": "Zelená",
+        "source_layer": "3_Zelená_popisky_krizovatky",
+        "source_handle": "101",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 30140.342,
+        "posun_na_krivku_m": 177.322,
+        "output_crs": "EPSG:25834",
+        "poradi_po_trase": 3
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          244961.47822343025,
+          5351698.52212151
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 3,
+        "barva": "Zelená",
+        "source_layer": "3_Zelená_popisky_krizovatky",
+        "source_handle": "FC",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 38508.222,
+        "posun_na_krivku_m": 0.01,
+        "output_crs": "EPSG:25834",
+        "poradi_po_trase": 4
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          251281.3328461114,
+          5356671.344224227
+        ]
+      }
+    }
+  ]
+}

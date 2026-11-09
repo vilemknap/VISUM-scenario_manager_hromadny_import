@@ -1,0 +1,99 @@
+{
+  "type": "FeatureCollection",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "EPSG:25834"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 2,
+        "barva": "Fialová",
+        "poradi_po_trase": 1,
+        "source_layer": "2_Fialová_popisky_krizovatky",
+        "source_handle": "41",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 829.73,
+        "posun_na_krivku_m": 6.14,
+        "source_crs": "EPSG:5514",
+        "output_crs": "EPSG:25834"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          220295.64158924136,
+          5344559.896999797
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 2,
+        "barva": "Fialová",
+        "poradi_po_trase": 2,
+        "source_layer": "2_Fialová_popisky_krizovatky",
+        "source_handle": "45",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 3575.09,
+        "posun_na_krivku_m": 11.697,
+        "source_crs": "EPSG:5514",
+        "output_crs": "EPSG:25834"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          222853.29974551976,
+          5345553.743874439
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 2,
+        "barva": "Fialová",
+        "poradi_po_trase": 3,
+        "source_layer": "2_Fialová_popisky_krizovatky",
+        "source_handle": "46",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 5593.094,
+        "posun_na_krivku_m": 47.962,
+        "source_crs": "EPSG:5514",
+        "output_crs": "EPSG:25834"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          224713.8268287717,
+          5346257.951231002
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 2,
+        "barva": "Fialová",
+        "poradi_po_trase": 4,
+        "source_layer": "2_Fialová_popisky_krizovatky",
+        "source_handle": "47",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 9072.945,
+        "posun_na_krivku_m": 22.404,
+        "source_crs": "EPSG:5514",
+        "output_crs": "EPSG:25834"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          227852.94898928193,
+          5345359.858767131
+        ]
+      }
+    }
+  ]
+}

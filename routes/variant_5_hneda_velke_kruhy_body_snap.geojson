@@ -1,0 +1,137 @@
+{
+  "type": "FeatureCollection",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "EPSG:25834"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 5,
+        "barva": "Hnědá",
+        "source_layer": "5_Hnědá_popisky_trasy",
+        "source_handle": "2DE",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 7499.423,
+        "posun_na_krivku_m": 28.136,
+        "output_crs": "EPSG:25834",
+        "poradi_po_trase": 1
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          228031.41142672498,
+          5336777.494085881
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 5,
+        "barva": "Hnědá",
+        "source_layer": "5_Hnědá_popisky_trasy",
+        "source_handle": "163",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 14659.459,
+        "posun_na_krivku_m": 89.726,
+        "output_crs": "EPSG:25834",
+        "poradi_po_trase": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          234559.7562356724,
+          5337915.101407438
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 5,
+        "barva": "Hnědá",
+        "source_layer": "5_Hnědá_popisky_trasy",
+        "source_handle": "15F",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 19677.421,
+        "posun_na_krivku_m": 0.391,
+        "output_crs": "EPSG:25834",
+        "poradi_po_trase": 3
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          238616.76353930216,
+          5340596.1365901595
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 5,
+        "barva": "Hnědá",
+        "source_layer": "5_Hnědá_popisky_trasy",
+        "source_handle": "161",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 29105.633,
+        "posun_na_krivku_m": 40.045,
+        "output_crs": "EPSG:25834",
+        "poradi_po_trase": 4
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          247346.7080441134,
+          5343420.868885811
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 5,
+        "barva": "Hnědá",
+        "source_layer": "5_Hnědá_popisky_trasy",
+        "source_handle": "162",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 42199.214,
+        "posun_na_krivku_m": 0.406,
+        "output_crs": "EPSG:25834",
+        "poradi_po_trase": 5
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          257874.57236969296,
+          5348864.257150095
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "variant": 5,
+        "barva": "Hnědá",
+        "source_layer": "5_Hnědá_popisky_trasy",
+        "source_handle": "208",
+        "radius_cad_m": 400.0,
+        "stacionaz_m": 45022.268,
+        "posun_na_krivku_m": 11.631,
+        "output_crs": "EPSG:25834",
+        "poradi_po_trase": 6
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          260487.462102982,
+          5349674.450883031
+        ]
+      }
+    }
+  ]
+}
