@@ -259,6 +259,7 @@ def rebase_width(M, ctx, tra, lmap, nmap, net_links, log):
         nodes_ok.update((f, to))
     out = []
     dropped = collections.Counter()
+    lost_links = set()
     for t in tra.tables:
         if t.name == "VERSION":
             continue
@@ -284,6 +285,8 @@ def rebase_width(M, ctx, tra, lmap, nmap, net_links, log):
                         r2[t.idx["NO"]] = str(pairs[(key[1], key[2])])
                     else:
                         ok = False
+                        if t.op == "*":
+                            lost_links.add(key)
             elif t.name in ("LANE", "LINKPOLY", "COUNTLOCATION") and "FROMNODENO" in t.idx:
                 ok = (g("FROMNODENO"), g("TONODENO")) in pairs
             elif t.name == "TURN":
@@ -300,7 +303,57 @@ def rebase_width(M, ctx, tra, lmap, nmap, net_links, log):
         out.append(nt)
     for tag, n in sorted(dropped.items()):
         warn.append("vypusteno %d radku %s (link v nove siti neexistuje)" % (n, tag))
+    if lost_links:
+        warn.append("POZOR: sirka nastavuje linky, ktere v geometrii nejsou (geometrie byla asi rucne zmenena "
+                    "po sirkach): %s - odpovidajici useky trasy zustanou bez typu/TSys, zkontrolujte!"
+                    % ", ".join("%d (%d-%d)" % k for k in sorted(lost_links)))
     return out, warn
+
+
+def closed_route_problems(M, geom_tra_path, width_paths):
+    """Po prenosu: (a) vlozene linky geometrie bez TSys, ktere zadna sirka neotevre,
+    (b) zavrena odboceni (prazdny TSYSSET, ne otoceni) mezi vlozenymi linkami / na vlozenych uzlech."""
+    out = []
+    try:
+        g = M.Tra(geom_tra_path)
+    except Exception:
+        return out
+    tl = g.table("+LINK")
+    closed = {}
+    ins_nodes = set()
+    tn = g.table("+NODE")
+    if tn is not None:
+        ins_nodes = set(M.to_int(tn.get(r, "NO")) for r in tn.rows)
+    if tl is not None and "TSYSSET" in tl.idx:
+        for r in tl.rows:
+            if tl.get(r, "TSYSSET") == "":
+                closed[(M.to_int(tl.get(r, "NO")), M.to_int(tl.get(r, "FROMNODENO")), M.to_int(tl.get(r, "TONODENO")))] = 1
+    for wp in width_paths:
+        try:
+            w = M.Tra(wp)
+        except Exception:
+            continue
+        t = w.table("*LINK")
+        still = set(closed)
+        if t is not None and "TSYSSET" in t.idx:
+            for r in t.rows:
+                k = (M.to_int(t.get(r, "NO")), M.to_int(t.get(r, "FROMNODENO")), M.to_int(t.get(r, "TONODENO")))
+                if t.get(r, "TSYSSET") != "":
+                    still.discard(k)
+        if still:
+            out.append("POZOR: v %s zustanou zavrene vlozene linky %s"
+                       % (Path(str(wp)).name, sorted(set(k[0] for k in still))))
+    tt = g.table("+TURN")
+    if tt is not None and "TSYSSET" in tt.idx:
+        bad = []
+        for r in tt.rows:
+            f, v, to = (M.to_int(tt.get(r, c)) for c in ("FROMNODENO", "VIANODENO", "TONODENO"))
+            if f != to and tt.get(r, "TSYSSET") == "" and (v in ins_nodes or f in ins_nodes or to in ins_nodes):
+                bad.append("%d-%d-%d" % (f, v, to))
+        if bad:
+            out.append("POZOR: zavrena odboceni (prazdny TSys) u vlozenych uzlu: %s - zkontrolujte, zda je to zamer"
+                       % ", ".join(bad))
+    return out
 
 
 def main():
@@ -518,6 +571,16 @@ def main():
                 except Exception:
                     pass
 
+        for g in geoms:
+            gcode = g["code"].replace("+", "_")
+            gnew = work / gcode / "canonical" / ("M%06d.tra" % g["no"])
+            wnew = [work / gcode / "canonical" / ("M%06d.tra" % w["no"]) for w in mods.values() if g["no"] in w["deps"]]
+            for x in closed_route_problems(M, gnew, wnew):
+                log("  - %s: %s" % (g["code"], x))
+                all_warn.append("%s: %s" % (g["code"], x))
+        npozor = sum(1 for x in all_warn if "POZOR" in x)
+        if npozor:
+            log("\n!!! %d upozorneni POZOR - pred apply je projdete (radky POZOR vyse) !!!" % npozor)
         summary = {"status": "PASS", "mode": mode, "node_map": ctx.node_map, "warnings": all_warn,
                    "outputs": [str(d) for _s, d in outputs]}
         (work / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -551,7 +614,9 @@ def main():
             log("\nAPPLY PASS. %s%d modifikaci. Zaloha: %s"
                 % ("Nahrazena base a " if replace_base else "Base beze zmeny, nahrazeno ", len(outputs), backup))
         log("VYSLEDEK: PASS (%s)" % mode)
-        status.write_text("PASS %s %s\n" % (mode, dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")), encoding="utf-8")
+        status.write_text("PASS %s %s%s\n" % (mode, dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                          (" - POZOR: %d upozorneni, viz LAST_RUN_prenos_base.log" % npozor) if npozor else ""),
+                          encoding="utf-8")
         log.copy_to(work / "run.log")
         return summary
     except Exception as exc:
