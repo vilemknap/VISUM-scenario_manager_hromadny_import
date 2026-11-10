@@ -1,0 +1,16 @@
+{
+  "mode": "dry-run",
+  "silent": true,
+
+  "source_project_dir": "C:/Users/vilem_knap/OneDrive - Valbek/Dokumenty/R1/VISUM/Síť příprava/AKTUALNI/v45/Priprava scenaru/R1_VARIANTY_v02_3_ochvaty v base/R1_VARIANTY",
+  "target_project_dir": "C:/Users/vilem_knap/OneDrive - Valbek/Dokumenty/R1/VISUM/Síť příprava/AKTUALNI/v45/Priprava scenaru/R1_VARIANTY_v02_4_aktualni_trasy_09_11/R1_VARIANTY",
+
+  "replace_base": false,
+  "old_base_version": "auto",
+  "source_tra_dir": "C:/R1_VARIANTY/Modifications",
+  "only_geometry_modifications": ["G_W1_oprava"],
+
+  "keep_nodes": [9900105],
+  "node_map_tolerance_m": 1.0,
+  "base_version": "R1_VARIANTYBase.ver"
+}

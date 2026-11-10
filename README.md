@@ -158,6 +158,11 @@ Spuštění:
 Původní soubory skript najde sám (`"source_tra_dir": "auto"`): první zálohu, ve které jsou soubory ještě
 v původní podobě. Případně zadejte složku ručně.
 
+### Původní soubory z jiného projektu
+`source_tra_dir` v `config_aktualizace.json` může ukazovat i na složku záloh jiného projektu
+(např. `C:/R1_VARIANTY/backup_modifications`) – skript v ní sám najde zálohu s původními soubory.
+Hodí se pro kopii projektu (např. na OneDrive), která vlastní `backup_modifications` nemá.
+
 ## Přenos změn base verze do jiného projektu (`visum_prenos_base.py`)
 
 Když se v jiné kopii projektu (zdroj) upravila **base verze** (např. obchvaty) a chcete ji
@@ -188,3 +193,8 @@ Postup:
 
 Volitelné klíče: `only_geometry_modifications` (seznam kódů), `target_tra_dir`, `target_vpdb`,
 `work_dir`, `backup_dir`, `node_map_tolerance_m` (uzel zdroje do této vzdálenosti = stejný uzel).
+
+### Jen vybrané modifikace do projektu, který už novou base má
+`config_prenos_base_jen_fialova.example.json`: `"replace_base": false` (base cíle se nemění),
+`"old_base_version": "auto"` (stará base ze zálohy posledního přenosu), `source_tra_dir` = složka
+s modifikacemi vůči staré base, `only_geometry_modifications` = které varianty.

@@ -1,17 +1,17 @@
 {
   "mode": "dry-run",
   "silent": true,
-  "source_tra_dir": "auto",
+  "source_tra_dir": "C:/R1_VARIANTY/backup_modifications",
 
   "variants": {
     "G_W1_oprava": {
       "enabled": true,
       "parts": [
-        {"route": "variant_2_fialova_aktualni.geojson", "nodes": "variant_2_fialova_aktualni_velke_kruhy_body_snap.geojson"}
+        {"route": "variant_2_fialova_aktualizovana.geojson", "nodes": "variant_2_fialova_aktualizovana_velke_kruhy_body_snap.geojson"}
       ]
     },
     "G_W5": {
-      "enabled": true,
+      "enabled": false,
       "parts": [
         {"nodes": "variant_6_oranzova_aktualni_velke_kruhy_body_snap.geojson"}
       ]

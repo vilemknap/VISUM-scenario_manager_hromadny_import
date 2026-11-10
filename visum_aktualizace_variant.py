@@ -54,8 +54,9 @@ def _is_original(tra_path):
     return not any(line.startswith("* From:") for line in head)
 
 
-def find_original_source(M, project, cfg, needed):
-    backup_root = M.resolve(cfg.get("backup_dir", "backup_modifications"), project)
+def find_original_source(M, project, cfg, needed, backup_root=None):
+    if backup_root is None:
+        backup_root = M.resolve(cfg.get("backup_dir", "backup_modifications"), project)
     if not backup_root.exists():
         raise M.Fail("Nenalezena slozka zaloh %s - nastavte source_tra_dir v config_aktualizace.json" % backup_root)
     for d in sorted(p for p in backup_root.iterdir() if p.is_dir()):
@@ -114,17 +115,20 @@ def main():
 
         # zdroj puvodnich .tra
         src = upd.get("source_tra_dir", "auto")
+        needed = []
+        vpdb = M.resolve(cfg["vpdb"], project)
+        for m in mods:
+            needed.append(m["tra"])
+            ws = m.get("width_modifications") or M.width_mods_from_vpdb(
+                vpdb, m.get("no") or M.mod_no_from_tra(m["tra"])) or []
+            needed += [w["tra"] for w in ws]
         if src in (None, "", "auto"):
-            needed = []
-            vpdb = M.resolve(cfg["vpdb"], project)
-            for m in mods:
-                needed.append(m["tra"])
-                ws = m.get("width_modifications") or M.width_mods_from_vpdb(
-                    vpdb, m.get("no") or M.mod_no_from_tra(m["tra"])) or []
-                needed += [w["tra"] for w in ws]
             src_dir = find_original_source(M, project, cfg, needed)
         else:
-            src_dir = M.resolve(src, project)
+            src_dir = M.resolve(src.replace("\\", "/"), project)
+            if not all((src_dir / n).exists() for n in needed):
+                # zadana slozka zaloh (napr. C:/R1_VARIANTY/backup_modifications) -> najdi v ni puvodni soubory
+                src_dir = find_original_source(M, project, cfg, needed, backup_root=src_dir)
         cfg["source_tra_dir"] = str(src_dir)
         log("AKTUALIZACE variant: %s" % ", ".join(m["code"] for m in mods))
         log("puvodni soubory ze zalohy: %s" % src_dir)

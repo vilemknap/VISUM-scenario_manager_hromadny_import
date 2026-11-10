@@ -336,8 +336,22 @@ def main():
         tgt_base = tgt_proj / base_name
         tgt_tra_dir = M.resolve(cfg.get("target_tra_dir", "Modifications"), tgt_proj)
         tgt_vpdb = M.resolve(cfg.get("target_vpdb", "R1_VARIANTY.vpdb"), tgt_proj)
-        for p, what in ((src_base, "zdrojova (nova) base"), (tgt_base, "cilova base"), (tgt_vpdb, "cilovy .vpdb"),
-                        (tgt_tra_dir, "slozka modifikaci cile")):
+        # varianta "jen modifikace": cil uz novou base ma, modifikace (proti stare base) se berou odjinud
+        replace_base = bool(cfg.get("replace_base", True))
+        ob = cfg.get("old_base_version")
+        if ob == "auto":
+            broot = M.resolve(cfg.get("backup_dir", "backup_pred_prenosem_base"), tgt_proj)
+            cands = sorted(broot.glob("*/" + base_name)) if broot.exists() else []
+            if not cands:
+                raise M.Fail("old_base_version=auto: v %s neni zadna zaloha base (prenos base jeste neprobehl?)" % broot)
+            old_base = cands[-1]
+        elif ob:
+            old_base = M.resolve(ob.replace("\\", "/"), tgt_proj)
+        else:
+            old_base = tgt_base
+        mods_dir = M.resolve(cfg["source_tra_dir"].replace("\\", "/"), tgt_proj) if cfg.get("source_tra_dir") else tgt_tra_dir
+        for p, what in ((src_base, "zdrojova (nova) base"), (old_base, "stara base"), (tgt_vpdb, "cilovy .vpdb"),
+                        (tgt_tra_dir, "slozka modifikaci cile"), (mods_dir, "slozka s modifikacemi ke prenosu")):
             if not p.exists():
                 raise M.Fail("Nenalezena %s: %s" % (what, p))
         stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -346,6 +360,8 @@ def main():
         log("PRENOS NOVE BASE + PRESTEHOVANI MODIFIKACI (rezim %s)" % mode)
         log("nova base (zdroj): %s" % src_base)
         log("cil: %s" % tgt_proj)
+        log("stara base: %s | modifikace ze: %s | nahradit base v cili: %s"
+            % (old_base, mods_dir, "ano" if replace_base else "ne"))
         log("work: %s" % work)
 
         visum = globals().get("Visum")
@@ -364,7 +380,7 @@ def main():
         ctx.keep_nodes = set(int(x) for x in cfg.get("keep_nodes", []))
 
         # stara a nova base
-        M.v_load(visum, tgt_base)
+        M.v_load(visum, old_base)
         old_xy = M.v_nodes(visum)
         old_links = M.v_links(visum)
         M.v_load(visum, src_base)
@@ -427,7 +443,7 @@ def main():
 
         max_link = max(ctx.new_link_nos | ctx.old_link_nos)
         max_node = max(ctx.new_nodes | ctx.old_nodes)
-        for p in tgt_tra_dir.glob("M*.tra"):
+        for p in list(tgt_tra_dir.glob("M*.tra")) + list(mods_dir.glob("M*.tra")):
             try:
                 tr = M.Tra(p)
             except Exception:
@@ -452,7 +468,7 @@ def main():
         outputs = []
         all_warn = []
         for g in geoms:
-            gpath = tgt_tra_dir / ("M%06d.tra" % g["no"])
+            gpath = mods_dir / ("M%06d.tra" % g["no"])
             if not gpath.exists():
                 raise M.Fail("Chybi %s (%s)" % (gpath.name, g["code"]))
             log("\n=== %s (%s) ===" % (g["code"], gpath.name))
@@ -473,10 +489,10 @@ def main():
             M.v_diff(visum, src_base, gver, new_g, hide)
             M.v_load(visum, src_base)
             M.v_apply(visum, new_g)
-            outputs.append((new_g, gpath))
+            outputs.append((new_g, tgt_tra_dir / gpath.name))
             log("  nova %s OK" % gpath.name)
             for w in [m for m in mods.values() if g["no"] in m["deps"]]:
-                wpath = tgt_tra_dir / ("M%06d.tra" % w["no"])
+                wpath = mods_dir / ("M%06d.tra" % w["no"])
                 if not wpath.exists():
                     raise M.Fail("Chybi %s (%s)" % (wpath.name, w["code"]))
                 wtra = M.Tra(wpath)
@@ -495,7 +511,7 @@ def main():
                 M.v_load(visum, src_base)
                 M.v_apply(visum, new_g)
                 M.v_apply(visum, new_w)
-                outputs.append((new_w, wpath))
+                outputs.append((new_w, tgt_tra_dir / wpath.name))
                 log("  nova %s (%s) OK" % (wpath.name, w["code"]))
                 try:
                     wver.unlink()
@@ -510,25 +526,30 @@ def main():
         else:
             backup = M.resolve(cfg.get("backup_dir", "backup_pred_prenosem_base"), tgt_proj) / stamp
             (backup / "Modifications").mkdir(parents=True, exist_ok=False)
-            shutil.copy2(str(tgt_base), str(backup / base_name))
+            if replace_base:
+                shutil.copy2(str(tgt_base), str(backup / base_name))
             for _src, dst in outputs:
-                shutil.copy2(str(dst), str(backup / "Modifications" / dst.name))
+                if dst.exists():
+                    shutil.copy2(str(dst), str(backup / "Modifications" / dst.name))
             try:
-                tmp = Path(str(tgt_base) + ".tmp_base_transfer")
-                shutil.copy2(str(src_base), str(tmp))
-                os.replace(str(tmp), str(tgt_base))
+                if replace_base:
+                    tmp = Path(str(tgt_base) + ".tmp_base_transfer")
+                    shutil.copy2(str(src_base), str(tmp))
+                    os.replace(str(tmp), str(tgt_base))
                 for src, dst in outputs:
                     tmp = Path(str(dst) + ".tmp_base_transfer")
                     shutil.copy2(str(src), str(tmp))
                     os.replace(str(tmp), str(dst))
             except Exception:
-                shutil.copy2(str(backup / base_name), str(tgt_base))
+                if replace_base:
+                    shutil.copy2(str(backup / base_name), str(tgt_base))
                 for _src, dst in outputs:
                     b = backup / "Modifications" / dst.name
                     if b.exists():
                         shutil.copy2(str(b), str(dst))
                 raise
-            log("\nAPPLY PASS. Nahrazena base a %d modifikaci. Zaloha: %s" % (len(outputs), backup))
+            log("\nAPPLY PASS. %s%d modifikaci. Zaloha: %s"
+                % ("Nahrazena base a " if replace_base else "Base beze zmeny, nahrazeno ", len(outputs), backup))
         log("VYSLEDEK: PASS (%s)" % mode)
         status.write_text("PASS %s %s\n" % (mode, dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")), encoding="utf-8")
         log.copy_to(work / "run.log")
